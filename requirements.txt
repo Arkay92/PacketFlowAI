@@ -1,0 +1,6 @@
+torch>=1.7.1
+numpy>=1.19.2
+scapy>=2.4.3
+datasets>=1.2.1
+torchvision>=0.8.2
+argparse>=1.1
