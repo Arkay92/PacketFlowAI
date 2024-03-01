@@ -1,5 +1,5 @@
 # PacketFlowAI
-PacketFlowAI is a deep learning-based tool designed for the real-time classification of network packets using Convolutional Neural Networks (CNN). It leverages PyTorch for model training and Scapy for packet capture and processing, enabling efficient identification of various types of network traffic.
+PacketFlowAI is a sophisticated tool powered by deep learning, specifically designed for the real-time classification of network packets using Convolutional Neural Networks (CNN). By integrating the robust capabilities of PyTorch for model development and Scapy for packet capture and processing, PacketFlowAI is a highly efficient solution for discerning various types of network traffic.
 
 ## Features
 - Real-time packet capture and classification
@@ -37,17 +37,18 @@ python main.py --mode train
 This will train the model using the dataset specified in the code and save the best-performing model for future use.
 
 ### Live Capture Mode
+For on-the-fly classification of network traffic, enter the following:
 
-To classify live network traffic, use the following command:
+```bash
+python main.py --mode capture [--interface <interface_name>]
 ```
-python main.py --mode capture
-```
+The --interface flag is optional and allows you to specify the network interface for packet capture. If not provided, it defaults to 'eth0'.
 
-Ensure you have the necessary permissions to capture packets on the specified network interface.
+Note: Ensure you possess the requisite permissions for packet capture on the chosen network interface.
 
 ## Customization
 
-You can customize the model architecture, dataset, and training parameters by modifying the `main.py` script according to your needs.
+PacketFlowAI offers flexibility allowing you to tailor the CNN architecture, dataset, and training parameters. Simply adjust the settings in the main.py script to align with your specific requirements.
 
 ## Contributing
 
