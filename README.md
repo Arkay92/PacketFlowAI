@@ -17,7 +17,7 @@ git clone https://github.com/Arkay92/PacketFlowAI.git
 ```
 2. Navigate to the cloned directory:
 ```
-cd PacketFlowCNN
+cd PacketFlowAI
 ```
 
 3. Install the required Python packages:
