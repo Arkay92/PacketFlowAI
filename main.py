@@ -15,16 +15,16 @@ MAX_VALUE = torch.tensor([100, 1])      # Maximum value of each feature in the t
 class PacketCNN(nn.Module):
     def __init__(self):
         super(PacketCNN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=2)
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2)
-        self.fc1 = nn.Linear(64 * 7 * 7, 1024)
-        self.fc2 = nn.Linear(1024, 10)
+        # Adjusted the kernel size and removed one conv layer and one pooling layer
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=(1, 2), stride=1)  # Adjusted kernel size to match input shape
+        # Removed self.conv2 and one maxpool to prevent over-reduction of spatial dimensions
+        self.fc1 = nn.Linear(32, 1024)  # Adjusted to match output from conv1
+        self.fc2 = nn.Linear(1024, 10)  # Assuming 10 is the number of classes you have
 
     def forward(self, x):
-        x = self.maxpool(torch.relu(self.conv1(x)))
-        x = self.maxpool(torch.relu(self.conv2(x)))
-        x = x.view(-1, 64 * 7 * 7)
+        x = torch.relu(self.conv1(x))
+        # Removed one relu/maxpool operation
+        x = x.view(-1, 32)  # Adjusted to match the flattened output from conv1
         x = torch.relu(self.fc1(x))
         x = self.fc2(x)
         return x
@@ -64,7 +64,7 @@ def preprocess_packet(packet):
     features = torch.tensor([packet_length, protocol_type], dtype=torch.float32)
     features = normalize(features)
     features = scale(features)
-    return features.view(1, 1, 1, -1)
+    return features.view(1, 1, -1, 2)
 
 def process_and_predict(packet, model, device):
     try:
