@@ -64,7 +64,7 @@ def preprocess_packet(packet):
     features = torch.tensor([packet_length, protocol_type], dtype=torch.float32)
     features = normalize(features)
     features = scale(features)
-    return features.view(1, 1, -1, 2)
+    return features.view(1, 2, 1, 1)
 
 def process_and_predict(packet, model, device):
     try:
