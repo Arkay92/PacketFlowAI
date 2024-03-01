@@ -130,6 +130,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Packet Classifier')
     parser.add_argument('--mode', type=str, choices=['train', 'capture'], required=True, help='Operation mode: train or capture')
+    parser.add_argument('--interface', type=str, required=False, default='eth0', help='Network interface to capture packets from')
     args = parser.parse_args()
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -138,4 +139,5 @@ if __name__ == '__main__':
     if args.mode == 'train':
         train_and_evaluate(model, device)
     elif args.mode == 'capture':
-        capture_live_packets('eth0', 10, model, device)
+        capture_live_packets(args.interface, 10, model, device)
+
