@@ -15,16 +15,13 @@ MAX_VALUE = torch.tensor([100, 1])      # Maximum value of each feature in the t
 class PacketCNN(nn.Module):
     def __init__(self):
         super(PacketCNN, self).__init__()
-        # Adjusted the kernel size and removed one conv layer and one pooling layer
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=(1, 2), stride=1)  # Adjusted kernel size to match input shape
-        # Removed self.conv2 and one maxpool to prevent over-reduction of spatial dimensions
-        self.fc1 = nn.Linear(32, 1024)  # Adjusted to match output from conv1
-        self.fc2 = nn.Linear(1024, 10)  # Assuming 10 is the number of classes you have
+        self.conv1 = nn.Conv2d(2, 32, kernel_size=(1, 1), stride=1)  # Adjusted for 2 channels
+        self.fc1 = nn.Linear(32, 1024)  # Assuming the output from conv1 is 32 features
+        self.fc2 = nn.Linear(1024, 10)  # Assuming 10 classes
 
     def forward(self, x):
         x = torch.relu(self.conv1(x))
-        # Removed one relu/maxpool operation
-        x = x.view(-1, 32)  # Adjusted to match the flattened output from conv1
+        x = x.view(-1, 32)  # Adjusted based on the output of conv1
         x = torch.relu(self.fc1(x))
         x = self.fc2(x)
         return x
@@ -59,25 +56,25 @@ def scale(features):
     return (features - MIN_VALUE) / (MAX_VALUE - MIN_VALUE)
 
 def preprocess_packet(packet):
+    if not packet.haslayer(TCP) and not packet.haslayer(UDP):
+        return None  # Skip packets that are neither TCP nor UDP
     packet_length = len(packet)
-    protocol_type = 0 if packet.haslayer(TCP) else 1 if packet.haslayer(UDP) else -1
+    protocol_type = 0 if packet.haslayer(TCP) else 1
     features = torch.tensor([packet_length, protocol_type], dtype=torch.float32)
-    features = normalize(features)
-    features = scale(features)
-    return features.view(1, 2, 1, 1)
+    features = (features - FEATURE_MEAN) / FEATURE_STD  # Normalize features
+    return features.view(1, 2, 1, 1)  # Reshape for model input
 
 def process_and_predict(packet, model, device):
-    try:
-        features = preprocess_packet(packet)
-        tensor_features = features.unsqueeze(0).to(device)
-        model.eval()
-        with torch.no_grad():
-            output = model(tensor_features)
-            prediction = output.argmax(dim=1).item()
-            print(f"Predicted class: {prediction}")
-    except Exception as e:
-        print(f"Error processing packet: {e}")
-
+    features = preprocess_packet(packet)
+    if features is None:
+        return  # Skip packets not preprocessed
+    tensor_features = features.to(device)
+    model.eval()
+    with torch.no_grad():
+        output = model(tensor_features)
+        prediction = output.argmax(dim=1).item()
+        print(f"Predicted class: {prediction}")
+        
 def train(model, device, train_loader, optimizer):
     model.train()
     for data, target in train_loader:
