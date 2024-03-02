@@ -13,7 +13,10 @@ FEATURE_STD = torch.tensor([20, 0.5])   # Example std dev values for each featur
 MIN_VALUE = torch.tensor([0, 0])        # Minimum value of each feature in the training set
 MAX_VALUE = torch.tensor([100, 1])      # Maximum value of each feature in the training set
 
+banned_ips = set()
 no_feedback_packets = set()
+malicious_ip_counts = {}
+ban_threshold = 5
 
 class PacketCNN(nn.Module):
     def __init__(self):
@@ -128,7 +131,11 @@ def preprocess_packet(packet):
     if packet.haslayer(TCP):
         # Extracting TCP flags (converting flag bits to a single value for simplicity)
         tcp_flags = sum([packet[TCP].flags.F, packet[TCP].flags.S << 1, packet[TCP].flags.R << 2, packet[TCP].flags.P << 3, packet[TCP].flags.A << 4, packet[TCP].flags.U << 5, packet[TCP].flags.E << 6, packet[TCP].flags.C << 7])
-
+    if packet.haslayer(IP):
+        src_ip = packet[IP].src
+        if src_ip in banned_ips:
+            print(f"Dropping packet from banned IP {src_ip}")
+            return  # Drop the packet by not processing it further
     features = torch.tensor([ip_version, ip_len, tcp_sport, tcp_dport, tcp_flags], dtype=torch.float32)
     
     # Ensure the tensor has the correct shape (1, 5) for the model input
@@ -266,6 +273,17 @@ def process_and_redirect(packet, model, device, optimizer, train_loader, filter_
             src_ip = packet[IP].src
             dst_ip = packet[IP].dst
             print(f"Source IP: {src_ip}, Destination IP: {dst_ip}")
+            # Update count for the source IP
+            if src_ip in malicious_ip_counts:
+                malicious_ip_counts[src_ip] += 1
+            else:
+                malicious_ip_counts[src_ip] = 1
+            
+             # Check if the IP exceeds the ban threshold
+            if malicious_ip_counts[src_ip] >= ban_threshold:
+                print(f"IP {src_ip} has exceeded the ban threshold and will be banned.")
+                # Add the IP to the banned_ips set
+                banned_ips.add(src_ip)
 
         if packet.haslayer(TCP):
             src_port = packet[TCP].sport
