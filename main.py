@@ -4,8 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
 from datasets import load_dataset
-from scapy.all import sniff
-from scapy.layers.inet import TCP, UDP
+from scapy.all import sniff, IP, TCP, UDP
 import re
 from sklearn.model_selection import train_test_split
 
@@ -17,9 +16,9 @@ MAX_VALUE = torch.tensor([100, 1])      # Maximum value of each feature in the t
 class PacketCNN(nn.Module):
     def __init__(self):
         super(PacketCNN, self).__init__()
-        self.fc1 = nn.Linear(5, 32)  # Input size 5, output size 32
-        self.fc2 = nn.Linear(32, 1024)  # Assuming the output from fc1 is 32 features
-        self.fc3 = nn.Linear(1024, 10)  # Assuming 10 classes
+        self.fc1 = nn.Linear(5, 32)  # Adjusted input size to 5
+        self.fc2 = nn.Linear(32, 1024)
+        self.fc3 = nn.Linear(1024, 10)
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -118,17 +117,35 @@ def scale(features):
 
 def preprocess_packet(packet):
     if not packet.haslayer(TCP) and not packet.haslayer(UDP):
-        return None  # Skip packets that are neither TCP nor UDP
+        return None
+    
+    # Basic features
     packet_length = len(packet)
-    protocol_type = 0 if packet.haslayer(TCP) else 1
-    features = torch.tensor([packet_length, protocol_type], dtype=torch.float32)
-    features = (features - FEATURE_MEAN) / FEATURE_STD  # Normalize features
-    return features.view(1, 2, 1, 1)  # Reshape for model input
+    protocol_type = 0 if packet.haslayer(TCP) else 1  # 0 for TCP, 1 for UDP
+    
+    # Additional features (similar to extract_features)
+    ip_version = packet.version if packet.haslayer(IP) else 0  # Fallback to 0 if IP layer is not present
+    ip_len = packet.len if packet.haslayer(IP) else 0  # Fallback to 0 if IP layer is not present
+    tcp_sport = packet[TCP].sport if packet.haslayer(TCP) else 0  # Fallback to 0 if TCP layer is not present
+    tcp_dport = packet[TCP].dport if packet.haslayer(TCP) else 9999  # Use 9999 for uncommon ports or if TCP layer is not present
+    tcp_flags = 0
+    if packet.haslayer(TCP):
+        # Extracting TCP flags (converting flag bits to a single value for simplicity)
+        tcp_flags = sum([packet[TCP].flags.F, packet[TCP].flags.S << 1, packet[TCP].flags.R << 2, packet[TCP].flags.P << 3, packet[TCP].flags.A << 4, packet[TCP].flags.U << 5, packet[TCP].flags.E << 6, packet[TCP].flags.C << 7])
+
+    features = torch.tensor([ip_version, ip_len, tcp_sport, tcp_dport, tcp_flags], dtype=torch.float32)
+    
+    # Ensure the tensor has the correct shape (1, 5) for the model input
+    features = features.unsqueeze(0)
+    
+    return features
 
 def process_and_predict(packet, model, device):
     features = preprocess_packet(packet)
     if features is None:
         return  # Skip packets not preprocessed
+    
+    print(f"Input tensor shape: {features.shape}")  # Add this line to print the shape
     tensor_features = features.to(device)
     model.eval()
     with torch.no_grad():
