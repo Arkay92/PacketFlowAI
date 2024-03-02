@@ -134,7 +134,6 @@ def preprocess_packet(packet):
     if packet.haslayer(IP):
         src_ip = packet[IP].src
         if src_ip in banned_ips:
-            print(f"Dropping packet from banned IP {src_ip}")
             return  # Drop the packet by not processing it further
     features = torch.tensor([ip_version, ip_len, tcp_sport, tcp_dport, tcp_flags], dtype=torch.float32)
     
@@ -246,7 +245,6 @@ def process_and_redirect(packet, model, device, optimizer, train_loader, filter_
 
     features = preprocess_packet(packet)
     if features is None:
-        print("Packet does not contain TCP/UDP layer, skipping...")
         return
 
     tensor_features = features.to(device)
