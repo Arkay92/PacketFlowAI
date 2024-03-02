@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
-import numpy as np
 from datasets import load_dataset
 from scapy.all import sniff, IP, TCP, UDP
 import re
 from sklearn.model_selection import train_test_split
+import hashlib
 
 FEATURE_MEAN = torch.tensor([50, 0.5])  # Example mean values for each feature
 FEATURE_STD = torch.tensor([20, 0.5])   # Example std dev values for each feature
@@ -109,12 +109,6 @@ def preprocess_data(dataset):
     targets = torch.tensor(targets, dtype=torch.long)
     return data, targets
 
-def normalize(features):
-    return (features - FEATURE_MEAN) / FEATURE_STD
-
-def scale(features):
-    return (features - MIN_VALUE) / (MAX_VALUE - MIN_VALUE)
-
 def preprocess_packet(packet):
     if not packet.haslayer(TCP) and not packet.haslayer(UDP):
         return None
@@ -139,20 +133,7 @@ def preprocess_packet(packet):
     features = features.unsqueeze(0)
     
     return features
-
-def process_and_predict(packet, model, device):
-    features = preprocess_packet(packet)
-    if features is None:
-        return  # Skip packets not preprocessed
     
-    print(f"Input tensor shape: {features.shape}")  # Add this line to print the shape
-    tensor_features = features.to(device)
-    model.eval()
-    with torch.no_grad():
-        output = model(tensor_features)
-        prediction = output.argmax(dim=1).item()
-        print(f"Predicted class: {prediction}")
-        
 def train(model, device, train_loader, optimizer, epoch, log_interval=10):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
@@ -215,10 +196,64 @@ def train_and_evaluate(model, device):
             torch.save(model.state_dict(), 'packet_cnn_model.pth')
             print("Model saved successfully!")
 
-def capture_live_packets(interface, model, device):
+def redirect_packet(packet):
+    analysis_server_ip = '192.168.1.101'  # IP address of the analysis server
+    if packet.haslayer(IP):
+        packet[IP].dst = analysis_server_ip
+        send(packet)
+
+def collect_feedback(packet_id):
+    feedback_file = 'packet_feedback.txt'  # File where feedback is stored
+    try:
+        with open(feedback_file, 'r') as file:
+            for line in file:
+                id, label = line.strip().split(',')
+                if id == packet_id:
+                    return int(label)
+    except FileNotFoundError:
+        print("Feedback file not found.")
+    return None
+
+def process_and_redirect(packet, model, device, optimizer):
+    features = preprocess_packet(packet)
+    if features is None:
+        print("Packet does not contain TCP/UDP layer, skipping...")
+        return
+
+    print(f"Input tensor shape: {features.shape}")  # Add this line to print the shape
+
+    tensor_features = features.to(device)
+    model.eval()
+    with torch.no_grad():
+        output = model(tensor_features)
+        prediction = output.argmax(dim=1).item()
+
+        print(f"Packet processed, model prediction: {prediction}")
+
+        if prediction == 1:  # Bad packet detected
+            packet_id = hashlib.sha256(raw(packet)).hexdigest()  # Generate packet ID
+            print(f"Redirecting bad packet with ID: {packet_id}")
+            redirect_packet(packet)
+            feedback = collect_feedback(packet_id)
+            if feedback is not None:
+                print(f"Collecting feedback for packet ID: {packet_id}")
+                update_model(model, tensor_features, torch.tensor([feedback], dtype=torch.long), optimizer, device)
+            else:
+                print(f"No feedback available for packet ID: {packet_id}")
+
+def update_model(model, new_data, new_labels, optimizer, device):
+    model.train()
+    new_data, new_labels = new_data.to(device), new_labels.to(device)
+    optimizer.zero_grad()
+    output = model(new_data)
+    loss = nn.CrossEntropyLoss()(output, new_labels)
+    loss.backward()
+    optimizer.step()
+
+def capture_live_packets(interface, model, device, optimizer):
     print("Starting packet capture. Press Ctrl+C to stop.")
     try:
-        sniff(iface=interface, prn=lambda packet: process_and_predict(packet, model, device))
+        sniff(iface=interface, prn=lambda packet: process_and_redirect(packet, model, device, optimizer))
     except KeyboardInterrupt:
         print("\nStopped packet capture.")
 
@@ -231,8 +266,9 @@ if __name__ == '__main__':
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = PacketCNN().to(device)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     if args.mode == 'train':
         train_and_evaluate(model, device)
     elif args.mode == 'capture':
-        capture_live_packets(args.interface, model, device) 
+        capture_live_packets(args.interface, model, device, optimizer)
