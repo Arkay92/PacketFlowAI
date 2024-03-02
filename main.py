@@ -231,9 +231,10 @@ def collect_feedback(packet_id):
             print(f"Redirecting bad packet with ID: {packet_id}")
             redirect_packet(packet)
             feedback = collect_feedback(packet_id)
+            # Inside the process_and_redirect function after collecting feedback
             if feedback is not None:
                 print(f"Collecting feedback for packet ID: {packet_id} and retraining model")
-                new_data = tensor_features
+                new_data = tensor_features.unsqueeze(0)  # Ensure it has a batch dimension
                 new_labels = torch.tensor([feedback], dtype=torch.long).to(device)
                 
                 # Update model with new data
