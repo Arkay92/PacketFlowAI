@@ -259,7 +259,18 @@ def update_model(model, new_data, new_labels, optimizer, device):
     loss.backward()
     optimizer.step()
 
-def process_and_redirect(packet, model, device, optimizer, train_loader):
+def process_and_redirect(packet, model, device, optimizer, train_loader, filter_ipv6=True, show_https=True, protocol_range=(80, 443)):
+    def strip_port(packet, src_port, dst_port):
+        packet.dport = dst_port
+        packet.sport = src_port
+
+    # Check if the packet has IP layer
+    if packet.haslayer(IP):
+        # Check if filtering by IPV6 is enabled and skip the packet if it's IPV6
+        if filter_ipv6 and packet[IP].version == 6:
+            print("Skipping IPV6 packet.")
+            return
+
     features = preprocess_packet(packet)
     if features is None:
         print("Packet does not contain TCP/UDP layer, skipping...")
@@ -272,6 +283,16 @@ def process_and_redirect(packet, model, device, optimizer, train_loader):
         prediction = output.argmax(dim=1).item()
 
     print(f"Packet processed, model prediction: {prediction}")
+
+    # Check if showing only HTTPS related traffic is enabled
+    if show_https:
+        # Check if the packet is TCP and the destination port is within the specified range
+        if packet.haslayer(TCP) and protocol_range[0] <= packet[TCP].dport <= protocol_range[1]:
+            # Modify the destination port to 80
+            strip_port(packet[TCP], packet[TCP].dport, 80)
+        else:
+            print("Skipping non-HTTPS traffic.")
+            return
 
     if prediction == 1:  # Assuming '1' is the label for malicious packets
         # Use bytes(packet) instead of raw(packet)
@@ -302,21 +323,35 @@ def process_and_redirect(packet, model, device, optimizer, train_loader):
         else:
             print(f"No feedback available for packet ID: {packet_id}")
 
-def capture_live_packets(interface, model, device, optimizer):
+def capture_live_packets(interface, model, device, optimizer, filter_ipv6=True, show_https=True, protocol_range=(80, 443)):
     train_loader = train_and_evaluate(model, device)  # Obtain the train_loader by training and evaluating the model
     print("Starting packet capture. Press Ctrl+C to stop.")
     try:
-        sniff(iface=interface, prn=lambda packet: process_and_redirect(packet, model, device, optimizer, train_loader))
+        sniff(iface=interface, prn=lambda packet: process_and_redirect(packet, model, device, optimizer, train_loader, filter_ipv6, show_https, protocol_range))
     except KeyboardInterrupt:
         print("\nStopped packet capture.")
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Packet Classifier')
+    parser.add_argument('--filter-ipv6', action='store_true', help='Filter IPV6 packets (default: True)')
+    parser.add_argument('--show-https', action='store_true', help='Show only HTTPS related traffic (default: True)')
+    parser.add_argument('--protocol', type=str, default='80:443', help='Protocol range to show (default: 80:443)')
+    return parser.parse_args()
+
 if __name__ == '__main__':
     import argparse
+
     parser = argparse.ArgumentParser(description='Packet Classifier')
     parser.add_argument('--mode', type=str, choices=['train', 'capture'], required=True, help='Operation mode: train or capture')
     parser.add_argument('--interface', type=str, required=False, default='eth0', help='Network interface to capture packets from')
-    args = parser.parse_args()
-    
+
+    # Add optional arguments for filtering IPV6, showing HTTPS, and specifying protocol range
+    parser.add_argument('--filter-ipv6', action='store_true', help='Filter IPV6 packets (default: True)')
+    parser.add_argument('--show-https', action='store_true', help='Show only HTTPS related traffic (default: True)')
+    parser.add_argument('--protocol', type=str, default='80:443', help='Protocol range to show (default: 80:443)')
+
+    args, unknown = parser.parse_known_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = PacketCNN().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -324,4 +359,5 @@ if __name__ == '__main__':
     if args.mode == 'train':
         train_and_evaluate(model, device)
     elif args.mode == 'capture':
-        capture_live_packets(args.interface, model, device, optimizer)
+        protocol_range = tuple(map(int, args.protocol.split(':')))
+        capture_live_packets(args.interface, model, device, optimizer, args.filter_ipv6, args.show_https, protocol_range)
