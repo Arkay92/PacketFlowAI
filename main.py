@@ -102,8 +102,6 @@ def preprocess_data(dataset):
     for item in dataset:
         features = extract_features(item['Packet/Tags']).unsqueeze(0)  # Add a batch dimension
         label = extract_label(item['Explanation'])
-        if label == 1:  # Assuming 1 indicates a bad packet
-            print(f"Bad Packet Data: {item['Packet/Tags']}")
         data.append(features)
         targets.append(label)
     
@@ -280,6 +278,9 @@ def process_and_redirect(packet, model, device, optimizer, train_loader):
         packet_id = hashlib.sha256(bytes(packet)).hexdigest()
         print(f"Redirecting bad packet with ID: {packet_id}")
         # Redirect packet logic here
+
+        # Print bad packet data
+        print(f"Bad Packet Data: {packet}")
 
         feedback = collect_feedback(packet_id)
         if feedback is not None:
