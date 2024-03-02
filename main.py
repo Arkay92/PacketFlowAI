@@ -16,7 +16,7 @@ MAX_VALUE = torch.tensor([100, 1])      # Maximum value of each feature in the t
 class PacketCNN(nn.Module):
     def __init__(self):
         super(PacketCNN, self).__init__()
-        self.fc1 = nn.Linear(5, 32)  # Adjusted input size to 5
+        self.fc1 = nn.Linear(5, 32)
         self.fc2 = nn.Linear(32, 1024)
         self.fc3 = nn.Linear(1024, 10)
 
@@ -102,6 +102,8 @@ def preprocess_data(dataset):
     for item in dataset:
         features = extract_features(item['Packet/Tags']).unsqueeze(0)  # Add a batch dimension
         label = extract_label(item['Explanation'])
+        if label == 1:  # Assuming 1 indicates a bad packet
+            print(f"Bad Packet Data: {item['Packet/Tags']}")
         data.append(features)
         targets.append(label)
     
@@ -175,8 +177,6 @@ def evaluate(model, device, test_loader, log_interval=10):
 def train_and_evaluate(model, device):
     raw_dataset = load_dataset('rdpahalavan/packet-tag-explanation')['train']
     data, targets = preprocess_data(raw_dataset)
-
-    # Split the data into training and test sets
     train_data, test_data, train_targets, test_targets = train_test_split(data, targets, test_size=0.2, random_state=42)
 
     train_dataset = PacketDataset(train_data, train_targets)
@@ -196,6 +196,8 @@ def train_and_evaluate(model, device):
             torch.save(model.state_dict(), 'packet_cnn_model.pth')
             print("Model saved successfully!")
 
+    return train_loader  # Return the train_loader for use in live packet capture and retraining
+
 def redirect_packet(packet):
     analysis_server_ip = '192.168.1.101'  # IP address of the analysis server
     if packet.haslayer(IP):
@@ -213,14 +215,10 @@ def collect_feedback(packet_id):
     except FileNotFoundError:
         print("Feedback file not found.")
     return None
-
-def process_and_redirect(packet, model, device, optimizer):
     features = preprocess_packet(packet)
     if features is None:
         print("Packet does not contain TCP/UDP layer, skipping...")
         return
-
-    print(f"Input tensor shape: {features.shape}")  # Add this line to print the shape
 
     tensor_features = features.to(device)
     model.eval()
@@ -236,8 +234,21 @@ def process_and_redirect(packet, model, device, optimizer):
             redirect_packet(packet)
             feedback = collect_feedback(packet_id)
             if feedback is not None:
-                print(f"Collecting feedback for packet ID: {packet_id}")
-                update_model(model, tensor_features, torch.tensor([feedback], dtype=torch.long), optimizer, device)
+                print(f"Collecting feedback for packet ID: {packet_id} and retraining model")
+                new_data = tensor_features
+                new_labels = torch.tensor([feedback], dtype=torch.long).to(device)
+                
+                # Update model with new data
+                model.train()
+                optimizer.zero_grad()
+                output = model(new_data)
+                loss = nn.CrossEntropyLoss()(output, new_labels)
+                loss.backward()
+                optimizer.step()
+
+                # Optionally, you can perform a quick evaluation after retraining
+                test_loss, accuracy = evaluate(model, device, train_loader)
+                print(f"After retraining - Loss: {test_loss}, Accuracy: {accuracy}%")
             else:
                 print(f"No feedback available for packet ID: {packet_id}")
 
@@ -250,10 +261,51 @@ def update_model(model, new_data, new_labels, optimizer, device):
     loss.backward()
     optimizer.step()
 
+def process_and_redirect(packet, model, device, optimizer, train_loader):
+    features = preprocess_packet(packet)
+    if features is None:
+        print("Packet does not contain TCP/UDP layer, skipping...")
+        return
+
+    tensor_features = features.to(device)
+    model.eval()
+    with torch.no_grad():
+        output = model(tensor_features)
+        prediction = output.argmax(dim=1).item()
+
+    print(f"Packet processed, model prediction: {prediction}")
+
+    if prediction == 1:  # Assuming '1' is the label for malicious packets
+        # Use bytes(packet) instead of raw(packet)
+        packet_id = hashlib.sha256(bytes(packet)).hexdigest()
+        print(f"Redirecting bad packet with ID: {packet_id}")
+        # Redirect packet logic here
+
+        feedback = collect_feedback(packet_id)
+        if feedback is not None:
+            print(f"Collecting feedback for packet ID: {packet_id} and retraining model")
+            new_data = tensor_features.unsqueeze(0)  # Ensure it has a batch dimension
+            new_labels = torch.tensor([feedback], dtype=torch.long).to(device)
+            
+            # Update model with new data
+            model.train()
+            optimizer.zero_grad()
+            output = model(new_data)
+            loss = nn.CrossEntropyLoss()(output, new_labels)
+            loss.backward()
+            optimizer.step()
+
+            # Optionally, perform a quick evaluation after retraining
+            test_loss, accuracy = evaluate(model, device, train_loader)
+            print(f"After retraining - Loss: {test_loss}, Accuracy: {accuracy}%")
+        else:
+            print(f"No feedback available for packet ID: {packet_id}")
+
 def capture_live_packets(interface, model, device, optimizer):
+    train_loader = train_and_evaluate(model, device)  # Obtain the train_loader by training and evaluating the model
     print("Starting packet capture. Press Ctrl+C to stop.")
     try:
-        sniff(iface=interface, prn=lambda packet: process_and_redirect(packet, model, device, optimizer))
+        sniff(iface=interface, prn=lambda packet: process_and_redirect(packet, model, device, optimizer, train_loader))
     except KeyboardInterrupt:
         print("\nStopped packet capture.")
 
