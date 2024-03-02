@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from datasets import load_dataset
-from scapy.all import sniff, IP, TCP, UDP
+from scapy.all import sniff, IP, TCP, UDP, send
 import re
 from sklearn.model_selection import train_test_split
 import hashlib
@@ -12,6 +12,8 @@ FEATURE_MEAN = torch.tensor([50, 0.5])  # Example mean values for each feature
 FEATURE_STD = torch.tensor([20, 0.5])   # Example std dev values for each feature
 MIN_VALUE = torch.tensor([0, 0])        # Minimum value of each feature in the training set
 MAX_VALUE = torch.tensor([100, 1])      # Maximum value of each feature in the training set
+
+no_feedback_packets = set()
 
 class PacketCNN(nn.Module):
     def __init__(self):
@@ -202,55 +204,6 @@ def redirect_packet(packet):
         packet[IP].dst = analysis_server_ip
         send(packet)
 
-def collect_feedback(packet_id):
-    feedback_file = 'packet_feedback.txt'  # File where feedback is stored
-    try:
-        with open(feedback_file, 'r') as file:
-            for line in file:
-                id, label = line.strip().split(',')
-                if id == packet_id:
-                    return int(label)
-    except FileNotFoundError:
-        print("Feedback file not found.")
-    return None
-    features = preprocess_packet(packet)
-    if features is None:
-        print("Packet does not contain TCP/UDP layer, skipping...")
-        return
-
-    tensor_features = features.to(device)
-    model.eval()
-    with torch.no_grad():
-        output = model(tensor_features)
-        prediction = output.argmax(dim=1).item()
-
-        print(f"Packet processed, model prediction: {prediction}")
-
-        if prediction == 1:  # Bad packet detected
-            packet_id = hashlib.sha256(raw(packet)).hexdigest()  # Generate packet ID
-            print(f"Redirecting bad packet with ID: {packet_id}")
-            redirect_packet(packet)
-            feedback = collect_feedback(packet_id)
-            # Inside the process_and_redirect function after collecting feedback
-            if feedback is not None:
-                print(f"Collecting feedback for packet ID: {packet_id} and retraining model")
-                new_data = tensor_features.unsqueeze(0)  # Ensure it has a batch dimension
-                new_labels = torch.tensor([feedback], dtype=torch.long).to(device)
-                
-                # Update model with new data
-                model.train()
-                optimizer.zero_grad()
-                output = model(new_data)
-                loss = nn.CrossEntropyLoss()(output, new_labels)
-                loss.backward()
-                optimizer.step()
-
-                # Optionally, you can perform a quick evaluation after retraining
-                test_loss, accuracy = evaluate(model, device, train_loader)
-                print(f"After retraining - Loss: {test_loss}, Accuracy: {accuracy}%")
-            else:
-                print(f"No feedback available for packet ID: {packet_id}")
-
 def update_model(model, new_data, new_labels, optimizer, device):
     model.train()
     new_data, new_labels = new_data.to(device), new_labels.to(device)
@@ -260,14 +213,26 @@ def update_model(model, new_data, new_labels, optimizer, device):
     loss.backward()
     optimizer.step()
 
+def collect_feedback(packet_id, packet):
+    feedback_file = 'packet_feedback.txt'  # File where feedback is stored
+    try:
+        with open(feedback_file, 'r') as file:
+            for line in file:
+                id, label = line.strip().split(',')
+                if id == packet_id:
+                    return int(label)  # Return the feedback for the given packet_id
+    except FileNotFoundError:
+        print("Feedback file not found.")
+        with open(feedback_file, 'w') as file:
+            pass  # Creating an empty file if not found
+    return None  # Return None if no feedback is found for the packet_id
+
 def process_and_redirect(packet, model, device, optimizer, train_loader, filter_ipv6=True, show_https=True, protocol_range=(80, 443)):
     def strip_port(packet, src_port, dst_port):
         packet.dport = dst_port
         packet.sport = src_port
 
-    # Check if the packet has IP layer
     if packet.haslayer(IP):
-        # Check if filtering by IPV6 is enabled and skip the packet if it's IPV6
         if filter_ipv6 and packet[IP].version == 6:
             print("Skipping IPV6 packet.")
             return
@@ -283,34 +248,46 @@ def process_and_redirect(packet, model, device, optimizer, train_loader, filter_
         output = model(tensor_features)
         prediction = output.argmax(dim=1).item()
 
-    print(f"Packet processed, model prediction: {prediction}")
+    # print(f"Packet processed, model prediction: {prediction}")
 
-    # Check if showing only HTTPS related traffic is enabled
     if show_https:
-        # Check if the packet is TCP and the destination port is within the specified range
         if packet.haslayer(TCP) and protocol_range[0] <= packet[TCP].dport <= protocol_range[1]:
-            # Modify the destination port to 80
             strip_port(packet[TCP], packet[TCP].dport, 80)
         else:
             print("Skipping non-HTTPS traffic.")
             return
 
-    if prediction == 1:  # Assuming '1' is the label for malicious packets
-        # Use bytes(packet) instead of raw(packet)
+    if prediction == 1:
         packet_id = hashlib.sha256(bytes(packet)).hexdigest()
         print(f"Redirecting bad packet with ID: {packet_id}")
-        # Redirect packet logic here
 
-        # Print bad packet data
-        print(f"Bad Packet Data: {packet}")
+        # Enhanced logging for bad packets
+        if packet.haslayer(IP):
+            src_ip = packet[IP].src
+            dst_ip = packet[IP].dst
+            print(f"Source IP: {src_ip}, Destination IP: {dst_ip}")
 
-        feedback = collect_feedback(packet_id)
+        if packet.haslayer(TCP):
+            src_port = packet[TCP].sport
+            dst_port = packet[TCP].dport
+            print(f"Source Port: {src_port}, Destination Port: {dst_port}, Flags: {packet[TCP].flags}")
+
+        if packet.haslayer(UDP):
+            src_port = packet[UDP].sport
+            dst_port = packet[UDP].dport
+            print(f"Source Port: {src_port}, Destination Port: {dst_port}")
+
+        packet_length = len(packet)
+        print(f"Packet Length: {packet_length}")
+
+        redirect_packet(packet)
+
+        feedback = collect_feedback(packet_id, packet)
         if feedback is not None:
-            print(f"Collecting feedback for packet ID: {packet_id} and retraining model")
-            new_data = tensor_features.unsqueeze(0)  # Ensure it has a batch dimension
+            print(f"Feedback for packet ID: {packet_id} is {feedback}. Retraining model...")
+            new_data = tensor_features.unsqueeze(0)
             new_labels = torch.tensor([feedback], dtype=torch.long).to(device)
             
-            # Update model with new data
             model.train()
             optimizer.zero_grad()
             output = model(new_data)
@@ -318,11 +295,12 @@ def process_and_redirect(packet, model, device, optimizer, train_loader, filter_
             loss.backward()
             optimizer.step()
 
-            # Optionally, perform a quick evaluation after retraining
             test_loss, accuracy = evaluate(model, device, train_loader)
             print(f"After retraining - Loss: {test_loss}, Accuracy: {accuracy}%")
         else:
-            print(f"No feedback available for packet ID: {packet_id}")
+            if packet_id not in no_feedback_packets:
+                print(f"No feedback available for packet ID: {packet_id}")
+                no_feedback_packets.add(packet_id)
 
 def capture_live_packets(interface, model, device, optimizer, filter_ipv6=True, show_https=True, protocol_range=(80, 443)):
     train_loader = train_and_evaluate(model, device)  # Obtain the train_loader by training and evaluating the model
