@@ -215,8 +215,12 @@ def train_and_evaluate(model, device):
             torch.save(model.state_dict(), 'packet_cnn_model.pth')
             print("Model saved successfully!")
 
-def capture_live_packets(interface, num_packets, model, device):
-    sniff(iface=interface, prn=lambda packet: process_and_predict(packet, model, device), count=num_packets)
+def capture_live_packets(interface, model, device):
+    print("Starting packet capture. Press Ctrl+C to stop.")
+    try:
+        sniff(iface=interface, prn=lambda packet: process_and_predict(packet, model, device))
+    except KeyboardInterrupt:
+        print("\nStopped packet capture.")
 
 if __name__ == '__main__':
     import argparse
@@ -231,5 +235,4 @@ if __name__ == '__main__':
     if args.mode == 'train':
         train_and_evaluate(model, device)
     elif args.mode == 'capture':
-        capture_live_packets(args.interface, 10, model, device)
-
+        capture_live_packets(args.interface, model, device) 
