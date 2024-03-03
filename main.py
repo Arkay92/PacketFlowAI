@@ -16,6 +16,7 @@ import os
 import threading
 from queue import Queue, Empty
 from threading import Lock, Event
+import ipaddress
 
 # Constants for feature extraction
 UNCOMMON_PORT = 9999
@@ -222,6 +223,9 @@ def preprocess_packet(packet):
     src_ip = packet[IP].src if packet.haslayer(IP) else None
 
     if src_ip:
+        if src_ip in banned_ips:  # Check if the source IP is already banned
+            return None  # Skip processing the packet if the IP is banned
+
         with malicious_ip_counts_lock:  # Lock before accessing the shared resource
             count = malicious_ip_counts.get(src_ip, 0) + 1  # Access the dictionary, not the lock
             malicious_ip_counts[src_ip] = count
@@ -230,6 +234,7 @@ def preprocess_packet(packet):
                 with banned_ips_lock:  # Lock before modifying the banned_ips set
                     banned_ips.add(src_ip)
                     print(f"IP {src_ip} has been banned.")
+                    return None  # Skip processing the packet further if the IP is banned now
 
     features = torch.tensor([ip_version, ip_len, tcp_sport, tcp_dport, tcp_flags], dtype=torch.float32).unsqueeze(0)
     return features
@@ -339,7 +344,18 @@ def process_and_redirect(packet, model, device, optimizer, train_loader, feedbac
 
         if packet.haslayer(IP):
             src_ip = packet[IP].src
-            dst_ip = packet[IP].dst
+            dst_ip = packet[IP].dst if packet.haslayer(IP) else None
+            if dst_ip:
+                ip_version = 4
+                if ipaddress.ip_address(dst_ip).version == 6:
+                    ip_version = 6
+                    if ipaddress.IPv6Address(dst_ip).is_private:
+                        return  # Ignore packets with private IPv6 addresses as destination
+                else:
+                    if ipaddress.IPv4Address(dst_ip).is_private:
+                        return  # Ignore packets with private IPv4 addresses as destination
+            else:
+                return  # Exit early if packet does not have IP layer
             print(f"Source IP: {src_ip}, Destination IP: {dst_ip}")
             malicious_ip_counts[src_ip] = malicious_ip_counts.get(src_ip, 0) + 1
             if malicious_ip_counts[src_ip] >= ban_threshold:
