@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import time  
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from datasets import load_dataset
@@ -12,6 +13,9 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import make_pipeline
 import numpy as np
 import os
+import threading
+from queue import Queue, Empty
+from threading import Lock, Event
 
 # Constants for feature extraction
 UNCOMMON_PORT = 9999
@@ -26,11 +30,18 @@ FEATURE_STD = torch.tensor([20, 0.5])   # Example std dev values for each featur
 MIN_VALUE = torch.tensor([0, 0])        # Minimum value of each feature in the training set
 MAX_VALUE = torch.tensor([100, 1])      # Maximum value of each feature in the training set
 
+# Initialize locks for thread-safe operations
+banned_ips_lock = Lock()
+malicious_ip_counts_lock = Lock()
+
+# Event for graceful shutdown
+shutdown_event = Event()
+ban_threshold = 5
+attack_types = ['benign', 'DDoS', 'port_scan', 'malware', 'phishing', 'other']  # Example attack types
+
 banned_ips = set()
 no_feedback_packets = set()
 malicious_ip_counts = {}
-ban_threshold = 5
-attack_types = ['benign', 'DDoS', 'port_scan', 'malware', 'phishing', 'other']  # Example attack types
 
 # Model file path
 MODEL_FILE_PATH = 'packet_cnn_model.pth'
@@ -173,6 +184,28 @@ def preprocess_data(dataset):
     targets = torch.tensor(targets, dtype=torch.long)
     return data, targets
 
+def packet_capture(queue, interface='eth0'):
+    """Capture packets and place them into a thread-safe queue."""
+    def capture(packet):
+        if shutdown_event.is_set():
+            return False  # Stop sniffing if shutdown is triggered
+        queue.put(packet)
+    sniff(iface=interface, prn=capture, stop_filter=lambda x: shutdown_event.is_set())
+
+def process_packets(queue, model, device, optimizer, feedback_data, filter_ipv6=True, show_https=True, protocol_range=(80, 443)):
+    while not shutdown_event.is_set():
+        try:
+            packet = queue.get(timeout=1)  # Timeout to check for shutdown event
+            process_and_redirect(packet, model, device, optimizer, None, feedback_data, filter_ipv6, show_https, protocol_range)
+        except Empty:  # Correctly catch the Empty exception when the queue is empty
+            continue
+        except Exception as e:
+            print(f"Error processing packet: {e}")
+
+def shutdown_handler():
+    print("Shutdown signal received. Shutting down gracefully.")
+    shutdown_event.set()
+
 def preprocess_packet(packet):
     if not packet.haslayer(TCP) and not packet.haslayer(UDP):
         return None
@@ -187,8 +220,16 @@ def preprocess_packet(packet):
         tcp_flags = sum([packet[TCP].flags.F, packet[TCP].flags.S << 1, packet[TCP].flags.R << 2, packet[TCP].flags.P << 3, packet[TCP].flags.A << 4, packet[TCP].flags.U << 5, packet[TCP].flags.E << 6, packet[TCP].flags.C << 7])
 
     src_ip = packet[IP].src if packet.haslayer(IP) else None
-    if src_ip and src_ip in banned_ips:
-        return  # Drop the packet by not processing it further
+
+    if src_ip:
+        with malicious_ip_counts_lock:  # Lock before accessing the shared resource
+            count = malicious_ip_counts.get(src_ip, 0) + 1  # Access the dictionary, not the lock
+            malicious_ip_counts[src_ip] = count
+
+            if count >= ban_threshold:
+                with banned_ips_lock:  # Lock before modifying the banned_ips set
+                    banned_ips.add(src_ip)
+                    print(f"IP {src_ip} has been banned.")
 
     features = torch.tensor([ip_version, ip_len, tcp_sport, tcp_dport, tcp_flags], dtype=torch.float32).unsqueeze(0)
     return features
@@ -361,8 +402,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Packet Classifier')
     parser.add_argument('--mode', type=str, choices=['train', 'capture'], required=True, help='Operation mode: train or capture')
     parser.add_argument('--interface', type=str, required=False, default='eth0', help='Network interface to capture packets from')
-
-    # Add optional arguments for filtering IPV6, showing HTTPS, and specifying protocol range
     parser.add_argument('--filter-ipv6', action='store_true', help='Filter IPV6 packets (default: True)')
     parser.add_argument('--show-https', action='store_true', help='Show only HTTPS related traffic (default: True)')
     parser.add_argument('--protocol', type=str, default='80:443', help='Protocol range to show (default: 80:443)')
@@ -391,12 +430,35 @@ if __name__ == '__main__':
         # Call train_and_evaluate with all required arguments
         train_and_evaluate(model, device, train_loader, test_loader)
     elif args.mode == 'capture':
-        # Load the model weights before starting packet capture
-        if os.path.exists(MODEL_FILE_PATH):
-            model.load_state_dict(torch.load(MODEL_FILE_PATH))
-            model.eval()  # Set the model to evaluation mode
-        else:
+        if not os.path.exists(MODEL_FILE_PATH):
             print("Model file not found. Please train the model first.")
             exit()
-        protocol_range = tuple(map(int, args.protocol.split(':')))
-        capture_live_packets(args.interface, model, device, optimizer, args.filter_ipv6, args.show_https, protocol_range)
+
+        model.load_state_dict(torch.load(MODEL_FILE_PATH))
+        model.eval()  # Set the model to evaluation mode
+
+        packet_queue = Queue()
+        feedback_data = load_feedback_file('packet_feedback.txt')
+        protocol_range = tuple(map(int, args.protocol.split(':')))  # Parse protocol_range
+
+        # Start packet capture thread
+        capture_thread = threading.Thread(target=packet_capture, args=(packet_queue, args.interface))
+        capture_thread.start()
+
+        # Start packet processing thread
+        processing_thread = threading.Thread(target=process_packets, args=(packet_queue, model, device, optimizer, feedback_data, args.filter_ipv6, args.show_https, protocol_range))
+        processing_thread.start()
+
+        # Keep the main thread running until a keyboard interrupt is received
+        try:
+            while True:
+                time.sleep(1)  # Sleep and let other threads do the work
+        except KeyboardInterrupt:
+            print("Shutdown signal received. Shutting down gracefully.")
+            shutdown_event.set()  # Signal threads to shut down
+
+        # Wait for threads to complete
+        capture_thread.join()
+        processing_thread.join()
+
+        print("All threads have been shut down.")
