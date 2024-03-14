@@ -1,4 +1,4 @@
-import time, torch, re, hashlib, os, threading, signal
+import logging, time, torch, re, hashlib, os, threading, signal
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
@@ -48,7 +48,7 @@ tfidf_vectorizer.fit(attack_types)
 
 # Dynamically set the text feature size based on the fitted vectorizer
 text_feature_size = 100  # This will be dynamically updated after fitting the vectorizer
-
+    
 class CombinedModel(nn.Module):
     def __init__(self, packet_feature_size, text_feature_size, num_categories):
         super(CombinedModel, self).__init__()
@@ -125,21 +125,42 @@ def normalize_features(features):
     max_values = torch.tensor([1, 65535, 65535, 65535, 255], dtype=torch.float32)  # Example max values
     return features / max_values
 
+def setup_logging():
+    """
+    Sets up logging
+    """
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler('exceptions.log')
+    file_handler.setLevel(logging.ERROR)
+
+    formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%dT%H:%M:%S')
+
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
 # Load both Packet and Text models
 def initialize_models(packet_model_file_path, text_model_file_path, device, packet_feature_size, text_feature_size, num_categories):
     packet_model = CombinedModel(packet_feature_size, text_feature_size, num_categories).to(device)
     if os.path.exists(packet_model_file_path):
-        print(f"Loading packet model from {packet_model_file_path}")
+        logging.info(f"Loading packet model from {packet_model_file_path}")
         packet_model.load_state_dict(torch.load(packet_model_file_path, map_location=device))
     else:
-        print("No packet model found. Initializing a new one.")
+        logging.info("No packet model found. Initializing a new one.")
 
     text_model = TextClassifier(input_dim=text_feature_size, num_categories=num_categories).to(device)
     if os.path.exists(text_model_file_path):
-        print(f"Loading text model from {text_model_file_path}")
+        logging.info(f"Loading text model from {text_model_file_path}")
         text_model.load_state_dict(torch.load(text_model_file_path, map_location=device))
     else:
-        print("No text model found. Initializing a new one.")
+        logging.info("No text model found. Initializing a new one.")
 
     packet_model.eval()
     text_model.eval()
@@ -294,11 +315,16 @@ def preprocess_data(dataset):
     return data, targets
 
 def packet_capture(queue, interface='eth0'):
-    print(f"Starting packet capture on {interface}. Press Ctrl+C to stop.")
+    logging.info(f"Starting packet capture on {interface}. Press Ctrl+C to stop.")
     def capture(packet):
-        print(f"Packet captured: {packet.summary()}")
+        logging.info(f"Packet captured: {packet.summary()}")
         queue.put(packet)
-    sniff(iface=interface, prn=capture, stop_filter=lambda x: shutdown_event.is_set())
+
+    try:
+        sniff(iface=interface, prn=capture, stop_filter=lambda x: shutdown_event.is_set())
+    except PermissionError:
+        logging.error("Error: Insufficient permissions to capture packets.")
+        exit(1)
 
 def process_packets(queue, model, device, optimizer, feedback_data, filter_ipv6=True, show_https=True, protocol_range=(80, 443)):
     while not shutdown_event.is_set():
@@ -308,10 +334,10 @@ def process_packets(queue, model, device, optimizer, feedback_data, filter_ipv6=
         except Empty:  # Correctly catch the Empty exception when the queue is empty
             continue
         except Exception as e:
-            print(f"Error processing packet: {e}")
+            logging.exception(f"Error processing packet: {e}")
 
 def shutdown_handler():
-    print("Shutdown signal received. Shutting down gracefully.")
+    logging.info("Shutdown signal received. Shutting down gracefully.")
     shutdown_event.set()
 
 def preprocess_packet(packet):
@@ -339,7 +365,7 @@ def preprocess_packet(packet):
             if count >= ban_threshold:
                 with banned_ips_lock:
                     banned_ips.add(src_ip)
-                    print(f"IP {src_ip} has been banned.")
+                    logging.info(f"IP {src_ip} has been banned.")
                 return None  # Skip further processing for banned IPs
 
     features = torch.tensor([ip_version, ip_len, tcp_sport, tcp_dport, tcp_flags], dtype=torch.float32).unsqueeze(0)
@@ -354,7 +380,7 @@ def load_feedback_file(feedback_file_path):
                 packet_id, label = line.strip().split(',')
                 feedback_data[packet_id] = int(label)
     except FileNotFoundError:
-        print("Feedback file not found. Creating a new feedback file.")
+        logging.info("Feedback file not found. Creating a new feedback file.")
         open(feedback_file_path, 'w').close()  # This creates an empty file
     return feedback_data
 
@@ -373,11 +399,11 @@ def train(model, device, train_loader, optimizer, epoch):
         total_loss += loss.item()
 
         if batch_idx % log_interval == 0:
-            print(f'Train Epoch: {epoch} [{batch_idx * len(packet_features)}/{len(train_loader.dataset)} '
+            logging.info(f'Train Epoch: {epoch} [{batch_idx * len(packet_features)}/{len(train_loader.dataset)} '
                   f'({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f}')
     
     avg_loss = total_loss / len(train_loader)
-    print(f'Epoch {epoch} Average Loss: {avg_loss:.4f}')
+    logging.info(f'Epoch {epoch} Average Loss: {avg_loss:.4f}')
 
 def evaluate(model, device, test_loader):
     model.eval()
@@ -399,7 +425,7 @@ def evaluate(model, device, test_loader):
     f1 = f1_score(all_targets, all_preds, average='weighted')
     accuracy = sum(p == t for p, t in zip(all_preds, all_targets)) / len(all_preds)
 
-    print(f'Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, Accuracy: {accuracy:.4f}')
+    logging.info(f'Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, Accuracy: {accuracy:.4f}')
 
 def train_and_evaluate(model, device, train_loader, test_loader, epochs=10):
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -464,7 +490,7 @@ def process_and_redirect(packet, packet_model, text_model, device, tfidf_vectori
     try:
         packet_features = preprocess_packet(packet)
         if packet_features is None:
-            print("Packet preprocessing returned None, skipping.")
+            logging.info("Packet preprocessing returned None, skipping.")
             return
 
         packet_features = packet_features.unsqueeze(0).to(device)
@@ -482,9 +508,9 @@ def process_and_redirect(packet, packet_model, text_model, device, tfidf_vectori
         if prediction != 0:
             redirect_packet(packet, redirect_ip)
             packet_id = hashlib.sha256(packet.build()).hexdigest()
-            print(f"Redirected packet {packet_id}, classified as {attack_types[prediction]}")
+            logging.info(f"Redirected packet {packet_id}, classified as {attack_types[prediction]}")
     except Exception as e:
-        print(f"Error processing packet: {e}")
+        logging.exception(f"Error processing packet: {e}")
 
 def adjust_dimensions(tensor):
     if tensor.dim() == 1:
@@ -493,13 +519,6 @@ def adjust_dimensions(tensor):
         tensor = tensor.view(tensor.size(0), -1)
     return tensor
 
-def capture_live_packets(interface, model, device, optimizer, filter_ipv6=True, show_https=True, protocol_range=(80, 443)):
-    feedback_data = load_feedback_file('packet_feedback.txt')
-    print("Starting packet capture. Press Ctrl+C to stop.")
-    try:
-        sniff(iface=interface, prn=lambda packet: process_and_redirect(packet, model, device, optimizer, feedback_data, filter_ipv6, show_https, protocol_range))
-    except KeyboardInterrupt:
-        print("\nStopped packet capture.")
 
 def load_and_preprocess_dataset():
     # Load the dataset from Hugging Face
@@ -535,6 +554,8 @@ def load_and_preprocess_dataset():
 
 if __name__ == '__main__':
     import argparse
+
+    setup_logging()
 
     feedback_data = load_feedback_file('packet_feedback.txt')
     parser = argparse.ArgumentParser(description='Packet Classifier')
@@ -583,13 +604,13 @@ if __name__ == '__main__':
         text_optimizer = optim.Adam(text_classifier.parameters(), lr=0.001)
 
         # Train packet model
-        print("Training Packet Model...")
+        logging.info("Training Packet Model...")
         train_and_evaluate(packet_model, device, train_packet_loader, test_packet_loader)
 
         # Train text classifier
-        print("Starting text model training...")
+        logging.info("Starting text model training...")
         for epoch in range(num_epochs):
-            print(f"Starting Epoch {epoch+1}/{num_epochs}")
+            logging.info(f"Starting Epoch {epoch+1}/{num_epochs}")
             total_loss = 0
             text_classifier.train()
 
@@ -607,13 +628,13 @@ if __name__ == '__main__':
         # Save the trained models
         torch.save(packet_model.state_dict(), MODEL_FILE_PATH)
         
-        print("Text model training completed.")
+        logging.info("Text model training completed.")
         # Save the model
         torch.save(text_classifier.state_dict(), TEXT_MODEL_FILE_PATH)  # Define TEXT_MODEL_FILE_PATH as needed
-        print(f'Model saved to {TEXT_MODEL_FILE_PATH}')
+        logging.info(f'Model saved to {TEXT_MODEL_FILE_PATH}')
     elif args.mode == 'capture':
         if not (os.path.exists(MODEL_FILE_PATH) and os.path.exists(TEXT_MODEL_FILE_PATH)):
-            print("Model files not found. Please train the models first.")
+            logging.error("Model files not found. Please train the models first.")
             exit()
 
         # Load both models
@@ -634,7 +655,7 @@ if __name__ == '__main__':
             while True:
                 time.sleep(1)  # Sleep and let other threads do the work
         except KeyboardInterrupt:
-            print("Shutdown signal received. Shutting down gracefully.")
+            logging.info("Shutdown signal received. Shutting down gracefully.")
             shutdown_event.set()  # Signal threads to shut down
 
         # Start packet processing thread, now with both models
@@ -645,4 +666,4 @@ if __name__ == '__main__':
         capture_thread.join()
         processing_thread.join()
 
-        print("All threads have been shut down.")
+        logging.info("All threads have been shut down.")
