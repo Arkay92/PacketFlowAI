@@ -1,70 +1,102 @@
 # PacketFlowAI
-PacketFlowAI is a cutting-edge network security tool that uses Hyperdimensional Computing (HDC) to classify network packets in real-time. By transitioning from traditional Convolutional Neural Networks (CNN) to hyperdimensional computing, PacketFlowAI delivers improved robustness, scalability, and efficiency for packet classification. It leverages PyTorch for model development and Scapy for real-time packet capture and processing, providing a powerful solution for detecting and classifying various types of network traffic.
+
+PacketFlowAI is a flow-centric network detection prototype built around deterministic hyperdimensional encoding, local neural/prototype/anomaly evidence, optional bounded NVIDIA NIM reasoning, and a conservative policy engine. Live capture and PCAP replay use the same flow, detection, fusion, policy, and evidence pipeline.
 
 ## Features
-- Real-time packet capture and classification with hyperdimensional computing
-- Hypervector-based data representation for robust and noise-tolerant classification
-- Customizable model architecture designed for high-dimensional input
-- Training and evaluation on labeled datasets using hyperdimensional techniques
-- Flexible command-line interface for training and live packet capture modes
-- Scalability and adaptability to new features and network threats
+
+- Deterministic HDC encoding with checkpoint integrity validation
+- Bidirectional IPv4/IPv6 TCP/UDP flow tracking with temporal and host features
+- Temporal HDC, prototype similarity, OOD detection, anomaly scoring, and calibration
+- Dataset-native label normalization without explanation leakage
+- Named dataset adapters and machine-readable security benchmark reports
+- Optional NIM disabled/shadow/influence modes with evidence sanitization
+- Deterministic fusion, ATT&CK provenance, alert-only defaults, and TTL containment gates
+- SQLite evidence, analyst-adjudicated feedback, drift checks, and active learning
+- Candidate/active/previous model registry with promotion and rollback
+- Read-only API, Prometheus metrics, structured logs, and operations dashboard
 
 ## Installation
-To set up PacketFlowAI, follow these steps:
+1. Clone the repository.
 
-1. Clone the repository:
-```
+```bash
 git clone https://github.com/Arkay92/PacketFlowAI.git
 ```
-2. Navigate to the cloned directory:
-```
-cd PacketFlowAI
-```
 
-3. Install the required Python packages:
-```
-pip install -r requirements.txt
+2. Install dependencies.
+
+```bash
+cd PacketFlowAI
+pip install -e .
 ```
 
 ## Usage
-PacketFlowAI can be run in two modes: **training mode** and **live capture mode**.
 
-### Training Mode
-To train the model on your dataset, use the following command:
-```
-python main.py --mode train
-```
-
-This command will preprocess the dataset, convert the packet features and textual data into hypervectors, and train the model using hyperdimensional techniques. The best-performing model is saved for future use.
-
-### Live Capture Mode
-For on-the-fly classification of network traffic, enter the following:
+List available commands:
 
 ```bash
-python main.py --mode capture [--interface <interface_name>]
+python -m packetflowai --help
 ```
-The --interface flag allows you to specify the network interface for packet capture (e.g., eth0 or wlan0). If not provided, it defaults to eth0.
 
-Ensure you have the necessary permissions for capturing packets on the chosen interface.
+Train against a dataset containing authoritative labels:
 
-PacketFlowAI will capture packets, convert their features into hypervectors, and classify them using the trained model.
+```bash
+python -m packetflowai train --dataset rdpahalavan/packet-tag-explanation --split train --epochs 10
+```
 
-## Customization
+List interfaces and start live capture:
 
-PacketFlowAI provides flexibility, allowing you to customize the model architecture, dataset, and hyperdimensional parameters. You can adjust the settings in the main.py script to suit your specific use case, including:
+```bash
+python -m packetflowai interfaces
+python -m packetflowai capture --interface <interface_name>
+```
 
-- Modifying the hypervector dimensions and encoding methods.
-- Altering the model architecture (e.g., number of layers, dropout rates).
-- Adjusting training parameters (e.g., batch size, learning rate, number of epochs).
+Replay a PCAP through the same flow pipeline:
 
-## Key Concepts in PacketFlowAI
-- Hyperdimensional Computing: A novel approach where data is represented as high-dimensional vectors (hypervectors), which offers increased robustness to noise and scalability in complex environments.
-- Binding and Permutation: Core operations in hyperdimensional computing that encode associations between data and capture sequential information.
+```bash
+python -m packetflowai replay traffic.pcap
+python -m packetflowai replay traffic.pcap --realtime --speed 10 --output artifacts/replay.json
+```
+
+Benchmark, model lifecycle, API/dashboard, and load testing:
+
+```bash
+python -m packetflowai benchmark run --dataset cicids2017 --input test.csv \
+  --predictions predictions.json --model candidate-v2 --output artifacts/benchmarks/report.json
+python -m packetflowai model list
+python -m packetflowai model promote packet-hv-mlp:2.3.0
+python -m packetflowai api --host 127.0.0.1 --port 8080
+python -m packetflowai loadtest --flows 10000 --packets-per-flow 4
+```
+
+`python main.py ...` remains available as a compatibility launcher. Live capture requires appropriate packet-capture permissions and Npcap on Windows.
+
+## Configuration
+
+Configuration is defined in `packetflowai/config.py`. Common runtime overrides are available through environment variables:
+
+- `PACKETFLOWAI_ARTIFACT_DIR`
+- `PACKETFLOWAI_HV_DIMENSION`
+- `PACKETFLOWAI_NUM_LEVELS`
+- `PACKETFLOWAI_ENCODER_SEED`
+- `PACKETFLOWAI_QUEUE_SIZE`
+- `PACKETFLOWAI_RISK_HALF_LIFE`
+- `PACKETFLOWAI_NIM_MODE` (`disabled`, `shadow`, or `influence`)
+- `NIM_BASE_URL`
+- `NIM_MODEL`
+- `NVIDIA_API_KEY` (environment/secret manager only)
+
+NIM is disabled by default. Its self-reported reasoning strength is not a calibrated probability, it cannot invoke enforcement, and its assessments cannot become training labels. Generated checkpoints, registry state, databases, reports, and logs live under `artifacts/` and are excluded from Git. Legacy state-dict-only checkpoints intentionally fail manifest validation.
+
+See [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), and [benchmark methodology](docs/BENCHMARKS.md).
 
 ## Contributing
 
-Contributions to PacketFlowAI are encouraged! If you have ideas for improvement, new features, or bug fixes, please submit a pull request or open an issue. Together, we can make PacketFlowAI more robust and feature-rich.
+Run the test suite with:
+
+```bash
+python -m unittest discover -v
+```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
