@@ -378,11 +378,17 @@ class StorageRegistryAndDriftTests(unittest.TestCase):
             port = server.server.server_address[1]
             health = json.loads(urlopen(f"http://127.0.0.1:{port}/health", timeout=2).read())
             api_metrics = json.loads(urlopen(f"http://127.0.0.1:{port}/metrics", timeout=2).read())
+            overview = json.loads(urlopen(f"http://127.0.0.1:{port}/overview", timeout=2).read())
+            dashboard = urlopen(f"http://127.0.0.1:{port}/", timeout=2).read().decode("utf-8")
+            stylesheet = urlopen(f"http://127.0.0.1:{port}/static/app.css", timeout=2).read().decode("utf-8")
             server.stop()
             thread.join(2)
             store.close()
         self.assertEqual(health["status"], "ok")
         self.assertEqual(api_metrics["flows"], 3)
+        self.assertEqual(overview["counts"]["flows"], 0)
+        self.assertIn("PacketFlowAI // Signal Room", dashboard)
+        self.assertIn(".network-stage", stylesheet)
 
 
 if __name__ == "__main__":

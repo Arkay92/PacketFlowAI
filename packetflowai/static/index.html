@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0f10">
+  <title>PacketFlowAI // Signal Room</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="PacketFlowAI Signal Room">
+      <span class="brand-mark">PF</span>
+      <span><strong>PacketFlowAI</strong><small>Signal Room</small></span>
+    </a>
+    <nav class="view-nav" aria-label="Dashboard views">
+      <button class="nav-chip is-active" data-view="all">Overview</button>
+      <button class="nav-chip" data-view="traffic">Traffic</button>
+      <button class="nav-chip" data-view="threats">Threats</button>
+      <button class="nav-chip" data-view="reasoning">Reasoning</button>
+    </nav>
+    <div class="system-state">
+      <span class="live-dot" id="live-dot"></span>
+      <span><strong id="system-state">Connecting</strong><small id="last-sync">Awaiting telemetry</small></span>
+      <button class="pause-button" id="pause-button" type="button" aria-pressed="false">Pause feed</button>
+    </div>
+  </header>
+
+  <main class="dashboard-shell" id="dashboard" data-view="all">
+    <section class="mission-strip" aria-label="System summary">
+      <div class="mission-copy">
+        <span class="eyebrow">Live network observatory</span>
+        <h1>See the shape of<br><em>every conversation.</em></h1>
+      </div>
+      <div class="metric-rack">
+        <article><span>Flows observed</span><strong id="metric-flows">0</strong><small id="metric-flow-rate">0.0 / sec</small></article>
+        <article><span>Open alerts</span><strong id="metric-alerts">0</strong><small id="metric-alert-note">No active alerts</small></article>
+        <article><span>Evidence points</span><strong id="metric-evidence">0</strong><small>Local + reasoning</small></article>
+        <article><span>NIM escalations</span><strong id="metric-nim">0</strong><small id="nim-mode-summary">Mode disabled</small></article>
+      </div>
+    </section>
+
+    <section class="panel network-panel span-8" data-panel="traffic">
+      <header class="panel-heading">
+        <div><span class="panel-index">01</span><h2>Network field</h2></div>
+        <div class="legend" aria-label="Network field legend">
+          <span><i class="legend-benign"></i>Normal</span>
+          <span><i class="legend-observe"></i>Observed</span>
+          <span><i class="legend-threat"></i>Threat</span>
+        </div>
+      </header>
+      <div class="network-stage">
+        <canvas id="network-canvas" aria-label="Animated visualization of recent network flows"></canvas>
+        <div class="network-reticle" aria-hidden="true"><span></span><span></span></div>
+        <div class="field-caption">
+          <span id="field-protocol">TCP / UDP / IPv6</span>
+          <strong id="field-status">Waiting for flow telemetry</strong>
+        </div>
+        <div class="field-clock" id="field-clock">00:00:00</div>
+      </div>
+    </section>
+
+    <section class="panel risk-panel span-4" data-panel="threats">
+      <header class="panel-heading"><div><span class="panel-index">02</span><h2>Threat pressure</h2></div><span class="status-tag" id="policy-level">NORMAL</span></header>
+      <div class="risk-instrument" id="risk-instrument" style="--risk:0">
+        <svg viewBox="0 0 240 145" role="img" aria-label="Current risk score">
+          <path class="gauge-track" d="M30 125 A90 90 0 0 1 210 125"></path>
+          <path class="gauge-value" d="M30 125 A90 90 0 0 1 210 125" pathLength="100"></path>
+        </svg>
+        <div class="risk-readout"><strong id="risk-current">0</strong><span>/ 100</span><small>Current fused risk</small></div>
+      </div>
+      <div class="risk-stats">
+        <div><span>Session peak</span><strong id="risk-peak">0</strong></div>
+        <div><span>Rolling mean</span><strong id="risk-average">0</strong></div>
+      </div>
+      <canvas class="sparkline" id="risk-sparkline" aria-label="Recent risk trend"></canvas>
+    </section>
+
+    <section class="panel flow-panel span-7" data-panel="traffic">
+      <header class="panel-heading">
+        <div><span class="panel-index">03</span><h2>Flow ledger</h2></div>
+        <span class="panel-meta" id="flow-count-label">Latest 0</span>
+      </header>
+      <div class="table-head" aria-hidden="true"><span>Route</span><span>Protocol</span><span>Volume</span><span>State</span></div>
+      <div class="flow-ledger" id="flow-ledger" data-testid="flow-ledger">
+        <div class="empty-state"><span class="empty-pulse"></span><strong>Listening for flows</strong><small>Capture or replay traffic to populate the ledger.</small></div>
+      </div>
+    </section>
+
+    <section class="panel class-panel span-5" data-panel="threats">
+      <header class="panel-heading"><div><span class="panel-index">04</span><h2>Classification mix</h2></div><span class="panel-meta">Last 1,000 decisions</span></header>
+      <div class="classification-bars" id="classification-bars"></div>
+      <div class="taxonomy-note"><span>Stage A</span><strong>Benign / malicious / unknown</strong><span>Stage B</span><strong>Attack family</strong></div>
+    </section>
+
+    <section class="panel incident-panel span-6" data-panel="threats">
+      <header class="panel-heading"><div><span class="panel-index">05</span><h2>Incident rail</h2></div><span class="severity-key">Priority ordered</span></header>
+      <div class="incident-list" id="incident-list">
+        <div class="empty-state compact"><strong>No policy alerts</strong><small>Alert-only mode is standing by.</small></div>
+      </div>
+    </section>
+
+    <section class="panel reasoning-panel span-6" data-panel="reasoning">
+      <header class="panel-heading"><div><span class="panel-index">06</span><h2>Evidence channels</h2></div><span class="status-tag muted" id="nim-mode">NIM DISABLED</span></header>
+      <div class="channel-grid">
+        <article><span class="channel-signal local"></span><small>Local classifier</small><strong id="local-confidence">--</strong><em>Calibrated confidence</em></article>
+        <article><span class="channel-signal prototype"></span><small>HDC prototype</small><strong id="prototype-similarity">--</strong><em>Cosine similarity</em></article>
+        <article><span class="channel-signal anomaly"></span><small>Anomaly model</small><strong id="anomaly-score">--</strong><em>Deviation score</em></article>
+        <article><span class="channel-signal nim"></span><small>NIM reasoning</small><strong id="nim-strength">--</strong><em>Separate, uncalibrated</em></article>
+      </div>
+      <div class="reasoning-trace" id="reasoning-trace">
+        <span>Decision provenance</span>
+        <p>No fused decision has been recorded.</p>
+      </div>
+    </section>
+
+    <section class="panel model-panel span-5" data-panel="reasoning">
+      <header class="panel-heading"><div><span class="panel-index">07</span><h2>Model registry</h2></div><span class="panel-meta" id="model-count">0 artifacts</span></header>
+      <div class="model-stack" id="model-stack">
+        <div class="empty-state compact"><strong>No registered model</strong><small>Train, evaluate, shadow, then promote.</small></div>
+      </div>
+    </section>
+
+    <section class="panel runtime-panel span-7" data-panel="all">
+      <header class="panel-heading"><div><span class="panel-index">08</span><h2>Runtime telemetry</h2></div><span class="status-tag safe">BOUNDED</span></header>
+      <div class="runtime-grid">
+        <article><span>Packets / sec</span><strong id="runtime-pps">0.0</strong><i style="--fill:0%"></i></article>
+        <article><span>Flows / sec</span><strong id="runtime-fps">0.0</strong><i style="--fill:0%"></i></article>
+        <article><span>Inference p95</span><strong id="runtime-p95">0 ms</strong><i style="--fill:0%"></i></article>
+        <article><span>Queue depth</span><strong id="runtime-queue">0</strong><i style="--fill:0%"></i></article>
+        <article><span>Dropped packets</span><strong id="runtime-dropped">0</strong><i class="danger" style="--fill:0%"></i></article>
+        <article><span>Memory traced</span><strong id="runtime-memory">0 MB</strong><i style="--fill:0%"></i></article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer-bar">
+    <span>PacketFlowAI v2.3</span>
+    <span>Local evidence remains authoritative</span>
+    <span id="footer-mode">Containment disabled</span>
+  </footer>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

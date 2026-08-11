@@ -107,3 +107,38 @@ class EventStore:
             f"SELECT * FROM {table} ORDER BY created_at DESC LIMIT ?", (min(max(limit, 1), 1000),)
         ).fetchall()
         return [{**dict(row), "payload": json.loads(row["payload"])} for row in rows]
+
+    def overview(self) -> dict[str, Any]:
+        tables = ("flows", "alerts", "decisions", "evidence", "nim_assessments", "feedback")
+        counts = {
+            table: int(self._connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in tables
+        }
+        decision_rows = self._connection.execute(
+            "SELECT payload FROM decisions ORDER BY created_at DESC LIMIT 1000"
+        ).fetchall()
+        decisions = [json.loads(row["payload"]) for row in decision_rows]
+        classifications: dict[str, int] = {}
+        policy_levels: dict[str, int] = {}
+        risks = []
+        for decision in decisions:
+            evidence = decision.get("evidence", {})
+            label = str(evidence.get("classifier_label", "unknown"))
+            classifications[label] = classifications.get(label, 0) + 1
+            level = str(decision.get("policy_level", "UNKNOWN"))
+            policy_levels[level] = policy_levels.get(level, 0) + 1
+            risks.append(float(decision.get("risk_score", 0.0)))
+        latest_flow = self.list("flows", 1)
+        latest_decision = self.list("decisions", 1)
+        return {
+            "counts": counts,
+            "classifications": classifications,
+            "policy_levels": policy_levels,
+            "risk": {
+                "current": risks[0] if risks else 0.0,
+                "average": sum(risks) / len(risks) if risks else 0.0,
+                "peak": max(risks, default=0.0),
+            },
+            "latest_flow": latest_flow[0] if latest_flow else None,
+            "latest_decision": latest_decision[0] if latest_decision else None,
+        }
