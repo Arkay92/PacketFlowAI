@@ -388,7 +388,10 @@ class StorageRegistryAndDriftTests(unittest.TestCase):
         self.assertEqual(api_metrics["flows"], 3)
         self.assertEqual(overview["counts"]["flows"], 0)
         self.assertIn("PacketFlowAI // Signal Room", dashboard)
+        self.assertIn("Forensic war room", dashboard)
+        self.assertIn('data-view="forensics"', dashboard)
         self.assertIn(".network-stage", stylesheet)
+        self.assertIn(".forensics-workspace", stylesheet)
 
 
 if __name__ == "__main__":

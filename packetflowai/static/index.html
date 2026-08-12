@@ -19,6 +19,7 @@
       <button class="nav-chip" data-view="traffic">Traffic</button>
       <button class="nav-chip" data-view="threats">Threats</button>
       <button class="nav-chip" data-view="reasoning">Reasoning</button>
+      <button class="nav-chip forensic-nav" data-view="forensics">Forensics</button>
     </nav>
     <div class="system-state">
       <span class="live-dot" id="live-dot"></span>
@@ -131,6 +132,97 @@
         <article><span>Queue depth</span><strong id="runtime-queue">0</strong><i style="--fill:0%"></i></article>
         <article><span>Dropped packets</span><strong id="runtime-dropped">0</strong><i class="danger" style="--fill:0%"></i></article>
         <article><span>Memory traced</span><strong id="runtime-memory">0 MB</strong><i style="--fill:0%"></i></article>
+      </div>
+    </section>
+
+    <section class="forensics-workspace" data-panel="forensics" aria-labelledby="forensics-title">
+      <header class="forensics-commandbar">
+        <div>
+          <span class="eyebrow">Threat analysis cell</span>
+          <h1 id="forensics-title">Forensic war room</h1>
+        </div>
+        <div class="forensic-counter">
+          <span>Flagged conversations</span>
+          <strong id="forensic-case-count">0</strong>
+          <small id="forensic-case-position">No case selected</small>
+        </div>
+        <div class="forensic-controls" aria-label="Forensic case navigation">
+          <button id="forensic-previous" type="button" aria-label="Previous forensic case">PREV <kbd>←</kbd></button>
+          <button id="forensic-next" type="button" aria-label="Next forensic case">NEXT <kbd>→</kbd></button>
+        </div>
+      </header>
+
+      <div class="forensics-grid">
+        <section class="forensic-map forensic-module" aria-labelledby="forensic-map-title">
+          <header><span>01</span><h2 id="forensic-map-title">Threat constellation</h2><small>SELECT A SIGNAL</small></header>
+          <div class="forensic-map-stage">
+            <canvas id="forensic-canvas" aria-label="Interactive map of orange and red forensic cases"></canvas>
+            <div class="forensic-scope" aria-hidden="true"><i></i><i></i></div>
+            <div class="forensic-map-key">
+              <span><i class="orange"></i>Suspicious</span>
+              <span><i class="red"></i>High confidence</span>
+            </div>
+            <p id="forensic-map-hint">Awaiting an orange or red policy signal.</p>
+          </div>
+          <div class="forensic-case-strip" id="forensic-case-strip" aria-label="Forensic case list"></div>
+        </section>
+
+        <aside class="forensic-dossier forensic-module" aria-labelledby="forensic-dossier-title">
+          <header><span>02</span><h2 id="forensic-dossier-title">Active dossier</h2><small id="forensic-severity">STANDBY</small></header>
+          <div class="dossier-identity">
+            <span id="forensic-case-id">NO ACTIVE CASE</span>
+            <h2 id="forensic-label">Waiting for evidence</h2>
+            <p id="forensic-explanation">Flagged packet conversations will be assembled here for analyst review.</p>
+          </div>
+          <div class="route-vector">
+            <div><span>Origin</span><strong id="forensic-source">--</strong><small id="forensic-source-port">PORT --</small></div>
+            <span class="route-arrow" aria-hidden="true">→</span>
+            <div><span>Target</span><strong id="forensic-destination">--</strong><small id="forensic-destination-port">PORT --</small></div>
+          </div>
+          <dl class="dossier-facts">
+            <div><dt>Protocol</dt><dd id="forensic-protocol">--</dd></div>
+            <div><dt>Flow state</dt><dd id="forensic-state">--</dd></div>
+            <div><dt>Risk score</dt><dd id="forensic-risk">--</dd></div>
+            <div><dt>Policy</dt><dd id="forensic-policy">--</dd></div>
+            <div><dt>First observed</dt><dd id="forensic-created">--</dd></div>
+            <div><dt>Duration</dt><dd id="forensic-duration">--</dd></div>
+          </dl>
+          <div class="analyst-directive">
+            <span>Analyst directive</span>
+            <strong id="forensic-action">MONITOR</strong>
+            <p id="forensic-reason">Local policy remains authoritative.</p>
+          </div>
+        </aside>
+
+        <section class="forensic-details forensic-module" aria-labelledby="forensic-details-title">
+          <header><span>03</span><h2 id="forensic-details-title">Packet anatomy</h2><small>FLOW-LEVEL RECONSTRUCTION</small></header>
+          <div class="forensic-stat-grid">
+            <article><span>Packets</span><strong id="forensic-packets">0</strong><small id="forensic-direction">0 FWD / 0 REV</small></article>
+            <article><span>Total volume</span><strong id="forensic-bytes">0 B</strong><small id="forensic-byte-rate">0 B/S</small></article>
+            <article><span>Packet rate</span><strong id="forensic-packet-rate">0.0</strong><small>PACKETS / SEC</small></article>
+            <article><span>Retransmits</span><strong id="forensic-retransmits">0</strong><small id="forensic-tcp-flags">SYN 0 / RST 0</small></article>
+            <article><span>Burst index</span><strong id="forensic-burst">0.00</strong><small>TRAFFIC SHAPE</small></article>
+            <article><span>Host spread</span><strong id="forensic-hosts">0</strong><small id="forensic-ports">0 DEST PORTS</small></article>
+          </div>
+          <div class="packet-balance">
+            <div class="balance-label"><span>Forward bytes</span><strong id="forensic-forward-bytes">0 B</strong></div>
+            <div class="balance-track"><i id="forensic-forward-bar"></i><i id="forensic-reverse-bar"></i></div>
+            <div class="balance-label reverse"><span>Reverse bytes</span><strong id="forensic-reverse-bytes">0 B</strong></div>
+          </div>
+        </section>
+
+        <section class="forensic-evidence forensic-module" aria-labelledby="forensic-evidence-title">
+          <header><span>04</span><h2 id="forensic-evidence-title">Evidence matrix</h2><small>FUSED, NOT FLATTENED</small></header>
+          <div class="forensic-evidence-grid" id="forensic-evidence-grid"></div>
+        </section>
+
+        <section class="forensic-raw forensic-module" aria-labelledby="forensic-raw-title">
+          <header><span>05</span><h2 id="forensic-raw-title">Protocol &amp; record</h2><small>READ-ONLY EVIDENCE</small></header>
+          <div class="raw-columns">
+            <dl id="forensic-metadata" class="metadata-list"></dl>
+            <pre id="forensic-raw-json" tabindex="0">{ "status": "awaiting_case" }</pre>
+          </div>
+        </section>
       </div>
     </section>
   </main>

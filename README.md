@@ -70,6 +70,8 @@ python -m packetflowai loadtest --flows 10000 --packets-per-flow 4
 
 The API command starts the **Signal Room** at `http://127.0.0.1:8080`. The live dashboard visualizes flow activity, threat pressure, classifications, alerts, evidence channels, model state, and runtime telemetry. It refreshes every four seconds and exposes a pause control for incident review.
 
+The **Forensics** view isolates orange and red packet conversations for deeper analysis. Select cases from the threat constellation or case strip, use the arrow keys to move between incidents, and inspect route identity, packet statistics, directional volume, model evidence, protocol metadata, policy provenance, and the correlated read-only record.
+
 Create the guided Signal Room presentation video with Playwright:
 
 ```bash

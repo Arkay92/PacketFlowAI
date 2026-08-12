@@ -13,6 +13,8 @@ const state = {
   status: {},
   riskHistory: Array(30).fill(0),
   lastRefresh: null,
+  forensicCases: [],
+  forensicIndex: 0,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -223,6 +225,264 @@ function renderRuntime() {
   });
 }
 
+function forensicSeverity(decision) {
+  const level = safeNumber(decision.policy_level);
+  const risk = safeNumber(decision.risk_score);
+  return level >= 4 || risk >= 65 ? "red" : "orange";
+}
+
+function buildForensicCases() {
+  const flows = new Map(state.flows.map((record) => [record.flow_id, record]));
+  const alerts = new Map(state.alerts.map((record) => [record.event_id, record]));
+  const nim = new Map(state.nim.map((record) => [record.event_id, record]));
+  const evidenceByEvent = new Map();
+  state.evidence.forEach((record) => {
+    const entries = evidenceByEvent.get(record.event_id) || [];
+    entries.push(record);
+    evidenceByEvent.set(record.event_id, entries);
+  });
+  state.forensicCases = state.decisions.flatMap((record) => {
+    const decision = record.payload || {};
+    const eventId = decision.event_id || record.event_id;
+    const label = String(decision.evidence?.classifier_label || "unknown").toLowerCase();
+    const level = safeNumber(decision.policy_level);
+    const risk = safeNumber(decision.risk_score);
+    if (label === "benign" || (level < 2 && risk < 35)) return [];
+    return [{
+      eventId,
+      decision,
+      decisionRecord: record,
+      flowRecord: flows.get(eventId) || null,
+      alertRecord: alerts.get(eventId) || null,
+      nimRecord: nim.get(eventId) || null,
+      evidenceRecords: evidenceByEvent.get(eventId) || [],
+      severity: forensicSeverity(decision),
+    }];
+  }).sort((left, right) => safeNumber(right.decision.risk_score) - safeNumber(left.decision.risk_score));
+  state.forensicIndex = Math.min(state.forensicIndex, Math.max(0, state.forensicCases.length - 1));
+}
+
+function forensicValue(value, fallback = "--") {
+  return value === null || value === undefined || value === "" ? fallback : value;
+}
+
+function renderForensicEvidence(caseFile) {
+  const target = $("forensic-evidence-grid");
+  const evidence = caseFile?.decision.evidence || {};
+  const channels = [
+    ["Local classifier", evidence.calibrated_confidence ?? evidence.classifier_confidence, "Calibrated confidence"],
+    ["HDC prototype", evidence.prototype_similarity, "Cosine similarity"],
+    ["Anomaly model", evidence.anomaly_score, "Deviation score"],
+    ["NIM context", evidence.nim_reasoning_strength, caseFile?.nimRecord ? "Shadow assessment" : "No assessment"],
+  ];
+  target.replaceChildren(...channels.map(([name, value, note]) => {
+    const numeric = value === null || value === undefined ? 0 : safeNumber(value);
+    const card = create("article", "forensic-evidence-card");
+    const meter = create("div", "evidence-meter");
+    const fill = create("i");
+    fill.style.setProperty("--score", `${Math.max(0, Math.min(100, numeric <= 1 ? numeric * 100 : numeric))}%`);
+    meter.append(fill);
+    card.append(create("span", "", name), create("strong", "", percent(value)), meter, create("small", "", note));
+    return card;
+  }));
+}
+
+function renderForensicMetadata(flow) {
+  const target = $("forensic-metadata");
+  const metadata = flow?.protocol_metadata || {};
+  const entries = Object.entries(metadata);
+  if (!entries.length) entries.push(["Protocol metadata", "Not captured"]);
+  target.replaceChildren(...entries.map(([key, value]) => {
+    const row = create("div");
+    row.append(create("dt", "", String(key).replaceAll("_", " ")), create("dd", "", String(value)));
+    return row;
+  }));
+}
+
+function renderForensics() {
+  buildForensicCases();
+  const cases = state.forensicCases;
+  const caseFile = cases[state.forensicIndex];
+  text("forensic-case-count", cases.length);
+  text("forensic-case-position", caseFile ? `CASE ${state.forensicIndex + 1} / ${cases.length}` : "No case selected");
+  $("forensic-previous").disabled = cases.length < 2;
+  $("forensic-next").disabled = cases.length < 2;
+
+  const strip = $("forensic-case-strip");
+  strip.replaceChildren(...cases.map((item, index) => {
+    const button = create("button", `forensic-case-button ${item.severity}${index === state.forensicIndex ? " is-active" : ""}`);
+    button.type = "button";
+    button.dataset.index = String(index);
+    const copy = create("span");
+    copy.append(
+      create("strong", "", String(item.decision.evidence?.classifier_label || "unknown").replaceAll("_", " ")),
+      create("small", "", `${Math.round(safeNumber(item.decision.risk_score))} risk / ${item.eventId}`),
+    );
+    button.append(create("i"), copy);
+    button.addEventListener("click", () => selectForensicCase(index));
+    return button;
+  }));
+
+  if (!caseFile) {
+    text("forensic-map-hint", "Awaiting an orange or red policy signal.");
+    renderForensicEvidence(null);
+    renderForensicMetadata(null);
+    $("forensic-raw-json").textContent = JSON.stringify({ status: "awaiting_case" }, null, 2);
+    return;
+  }
+
+  const flow = caseFile.flowRecord?.payload || {};
+  const decision = caseFile.decision;
+  const alert = caseFile.alertRecord?.payload || {};
+  const evidence = decision.evidence || {};
+  const dossier = document.querySelector(".forensic-dossier");
+  document.querySelector(".forensics-workspace").classList.toggle("is-red", caseFile.severity === "red");
+  dossier.classList.toggle("is-red", caseFile.severity === "red");
+  text("forensic-severity", caseFile.severity === "red" ? "RED / HIGH CONFIDENCE" : "ORANGE / SUSPICIOUS");
+  text("forensic-case-id", caseFile.eventId);
+  text("forensic-label", String(evidence.classifier_label || "unknown").replaceAll("_", " "));
+  text("forensic-explanation", decision.explanation || alert.reason || "Evidence threshold crossed.");
+  text("forensic-source", forensicValue(flow.source_ip));
+  text("forensic-source-port", `PORT ${forensicValue(flow.source_port)}`);
+  text("forensic-destination", forensicValue(flow.destination_ip));
+  text("forensic-destination-port", `PORT ${forensicValue(flow.destination_port)}`);
+  text("forensic-protocol", forensicValue(flow.protocol));
+  text("forensic-state", forensicValue(flow.state));
+  text("forensic-risk", `${safeNumber(decision.risk_score).toFixed(1)} / 100`);
+  text("forensic-policy", policyName(decision.policy_level));
+  text("forensic-created", new Date(caseFile.decisionRecord.created_at).toLocaleString());
+  text("forensic-duration", `${safeNumber(flow.duration_seconds).toFixed(3)} sec`);
+  text("forensic-action", String(decision.action || alert.action || "monitor").toUpperCase());
+  text("forensic-reason", decision.reason || alert.reason || "Local policy remains authoritative.");
+  text("forensic-packets", number.format(flow.packet_count || 0));
+  text("forensic-direction", `${flow.forward_packets || 0} FWD / ${flow.reverse_packets || 0} REV`);
+  text("forensic-bytes", bytes(flow.byte_count));
+  text("forensic-byte-rate", `${bytes(flow.bytes_per_second)} / S`);
+  text("forensic-packet-rate", safeNumber(flow.packets_per_second).toFixed(1));
+  text("forensic-retransmits", flow.retransmission_count || 0);
+  text("forensic-tcp-flags", `SYN ${flow.syn_count || 0} / RST ${flow.rst_count || 0}`);
+  text("forensic-burst", safeNumber(flow.burstiness).toFixed(2));
+  text("forensic-hosts", flow.unique_destination_hosts || 0);
+  text("forensic-ports", `${flow.unique_destination_ports || 0} DEST PORTS`);
+  text("forensic-forward-bytes", bytes(flow.forward_bytes));
+  text("forensic-reverse-bytes", bytes(flow.reverse_bytes));
+  const totalDirectionalBytes = safeNumber(flow.forward_bytes) + safeNumber(flow.reverse_bytes) || 1;
+  $("forensic-forward-bar").parentElement.style.setProperty(
+    "--forward", `${safeNumber(flow.forward_bytes) / totalDirectionalBytes * 100}%`,
+  );
+  text("forensic-map-hint", `${caseFile.severity.toUpperCase()} SIGNAL / ${caseFile.eventId} / CLICK NODES TO NAVIGATE`);
+  renderForensicEvidence(caseFile);
+  renderForensicMetadata(flow);
+  $("forensic-raw-json").textContent = JSON.stringify({
+    flow,
+    decision,
+    alert: caseFile.alertRecord?.payload || null,
+    evidence: caseFile.evidenceRecords.map((record) => ({ channel: record.channel, payload: record.payload })),
+    nim: caseFile.nimRecord?.payload || null,
+  }, null, 2);
+}
+
+function selectForensicCase(index) {
+  if (!state.forensicCases.length) return;
+  state.forensicIndex = (index + state.forensicCases.length) % state.forensicCases.length;
+  renderForensics();
+}
+
+class ForensicField {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.context = canvas.getContext("2d");
+    this.points = [];
+    this.phase = 0;
+    this.resize = this.resize.bind(this);
+    this.draw = this.draw.bind(this);
+    new ResizeObserver(this.resize).observe(canvas);
+    canvas.addEventListener("click", (event) => this.select(event));
+    requestAnimationFrame(this.draw);
+  }
+
+  resize() {
+    const ratio = window.devicePixelRatio || 1;
+    this.width = this.canvas.clientWidth;
+    this.height = this.canvas.clientHeight;
+    if (!this.width || !this.height) return;
+    this.canvas.width = this.width * ratio;
+    this.canvas.height = this.height * ratio;
+    this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  }
+
+  hash(value) {
+    let result = 2166136261;
+    for (const char of String(value)) result = Math.imul(result ^ char.charCodeAt(0), 16777619);
+    return (result >>> 0) / 4294967295;
+  }
+
+  select(event) {
+    const bounds = this.canvas.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    const nearest = this.points.reduce((best, point) => {
+      const distance = Math.hypot(point.x - x, point.y - y);
+      return !best || distance < best.distance ? { ...point, distance } : best;
+    }, null);
+    if (nearest && nearest.distance < 24) selectForensicCase(nearest.index);
+  }
+
+  draw() {
+    if (!this.width) this.resize();
+    if (!this.width || !this.height) {
+      requestAnimationFrame(this.draw);
+      return;
+    }
+    const ctx = this.context;
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+    const radius = Math.min(this.width, this.height) * .39;
+    ctx.clearRect(0, 0, this.width, this.height);
+    ctx.strokeStyle = "rgba(255,191,105,.075)";
+    ctx.lineWidth = 1;
+    [0.25, 0.5, 0.75, 1].forEach((scale) => {
+      ctx.beginPath(); ctx.arc(cx, cy, radius * scale, 0, Math.PI * 2); ctx.stroke();
+    });
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) {
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius); ctx.stroke();
+    }
+    const sweep = this.phase % (Math.PI * 2);
+    const sweepGradient = ctx.createLinearGradient(cx, cy, cx + Math.cos(sweep) * radius, cy + Math.sin(sweep) * radius);
+    sweepGradient.addColorStop(0, "rgba(255,191,105,0)");
+    sweepGradient.addColorStop(1, "rgba(255,191,105,.38)");
+    ctx.strokeStyle = sweepGradient;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(sweep) * radius, cy + Math.sin(sweep) * radius); ctx.stroke();
+
+    this.points = state.forensicCases.map((caseFile, index) => {
+      const angle = this.hash(caseFile.eventId) * Math.PI * 2;
+      const risk = safeNumber(caseFile.decision.risk_score);
+      const distance = radius * (.3 + Math.min(1, risk / 100) * .62);
+      return { index, x: cx + Math.cos(angle) * distance, y: cy + Math.sin(angle) * distance, caseFile };
+    });
+    this.points.forEach((point) => {
+      const selected = point.index === state.forensicIndex;
+      const red = point.caseFile.severity === "red";
+      const color = red ? "255,107,87" : "255,191,105";
+      ctx.strokeStyle = `rgba(${color},${selected ? .5 : .15})`;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(point.x, point.y); ctx.stroke();
+      if (selected) {
+        ctx.strokeStyle = `rgba(${color},${.35 + Math.sin(this.phase * 3) * .12})`;
+        ctx.beginPath(); ctx.arc(point.x, point.y, 13, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.fillStyle = `rgb(${color})`;
+      ctx.shadowColor = `rgba(${color},.8)`;
+      ctx.shadowBlur = selected ? 14 : 6;
+      ctx.beginPath(); ctx.arc(point.x, point.y, selected ? 5 : 3, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+    ctx.fillStyle = "#ffbf69";
+    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
+    this.phase += .009;
+    requestAnimationFrame(this.draw);
+  }
+}
+
 function drawSparkline() {
   const canvas = $("risk-sparkline");
   const ratio = window.devicePixelRatio || 1;
@@ -330,6 +590,7 @@ async function refresh() {
     text("system-state", health.status === "ok" ? "System live" : health.status);
     text("last-sync", `Synced ${state.lastRefresh.toLocaleTimeString()}`);
     renderSummary(); renderFlows(); renderClasses(); renderIncidents(); renderEvidence(); renderModels(); renderRuntime();
+    renderForensics();
   } catch (error) {
     $("live-dot").className = "live-dot is-error";
     text("system-state", "API unavailable");
@@ -341,7 +602,16 @@ document.querySelectorAll(".nav-chip").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".nav-chip").forEach((item) => item.classList.toggle("is-active", item === button));
     $("dashboard").dataset.view = button.dataset.view;
+    if (button.dataset.view === "forensics") renderForensics();
   });
+});
+
+$("forensic-previous").addEventListener("click", () => selectForensicCase(state.forensicIndex - 1));
+$("forensic-next").addEventListener("click", () => selectForensicCase(state.forensicIndex + 1));
+document.addEventListener("keydown", (event) => {
+  if ($("dashboard").dataset.view !== "forensics" || event.target.matches("input, textarea, pre")) return;
+  if (event.key === "ArrowLeft") selectForensicCase(state.forensicIndex - 1);
+  if (event.key === "ArrowRight") selectForensicCase(state.forensicIndex + 1);
 });
 
 $("pause-button").addEventListener("click", () => {
@@ -354,5 +624,6 @@ $("pause-button").addEventListener("click", () => {
 
 setInterval(() => text("field-clock", new Date().toLocaleTimeString("en-GB")), 1000);
 new NetworkField($("network-canvas"));
+new ForensicField($("forensic-canvas"));
 refresh();
 setInterval(refresh, 4000);
