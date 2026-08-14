@@ -1,6 +1,6 @@
 # PacketFlowAI
 
-PacketFlowAI is a flow-centric network detection prototype built around deterministic hyperdimensional encoding, local neural/prototype/anomaly evidence, optional bounded NVIDIA NIM reasoning, and a conservative policy engine. Live capture and PCAP replay use the same flow, detection, fusion, policy, and evidence pipeline.
+PacketFlowAI is a predictive cyber-defence prototype built around a temporal threat world model, deterministic hyperdimensional encoding, local neural/prototype/anomaly evidence, optional bounded NVIDIA NIM reasoning, and an explicit authority graph. Live capture and PCAP replay use the same flow, detection, fusion, policy, evidence, and campaign pipeline.
 
 ## Features
 
@@ -14,6 +14,11 @@ PacketFlowAI is a flow-centric network detection prototype built around determin
 - SQLite evidence, analyst-adjudicated feedback, drift checks, and active learning
 - Candidate/active/previous model registry with promotion and rollback
 - Read-only API, Prometheus metrics, structured logs, and operations dashboard
+- Persistent campaign graph connecting flows, hosts, accounts, services, alerts, ATT&CK techniques, and cases
+- Next-move prediction with uncertainty, evidence references, and time horizons
+- Counterfactual response simulation and digital-twin blast-radius analysis
+- Evidence time reconstruction, hash-chain sealing, Merkle verification, and explicit action authority
+- Multi-sensor adapters, threat memory, guarded continual prototypes, federated consensus, and bounded playbooks
 
 ## Installation
 1. Clone the repository.
@@ -72,6 +77,8 @@ The API command starts the **Signal Room** at `http://127.0.0.1:8080`. The live 
 
 The **Forensics** view isolates orange and red packet conversations for deeper analysis. Select cases from the threat constellation or case strip, use the arrow keys to move between incidents, and inspect route identity, packet statistics, directional volume, model evidence, protocol metadata, policy provenance, and the correlated read-only record.
 
+The **Command** view is the v3 predictive-defence cell. Navigate the temporal threat graph, inspect campaign and next-move assessments, compare counterfactual responses, rewind the evidence timeline, verify the sealed forensic chain, and inspect exactly where autonomous authority ends.
+
 Create the guided Signal Room presentation video with Playwright:
 
 ```bash
@@ -81,6 +88,22 @@ python scripts/create_ui_video.py
 ```
 
 The recorder uses isolated presentation data and writes `artifacts/presentation/packetflowai-signal-room-tour.webm`. Each explanatory card and dashboard view is held for at least six seconds.
+
+Record the interactive Forensic War Room analyst journey with:
+
+```bash
+python scripts/create_forensics_video.py
+```
+
+This walkthrough uses a visible guided cursor, real clicks, smooth scrolling, case navigation, and the same UI-styled explanatory cards. It writes `artifacts/presentation/packetflowai-forensics-war-room-tour.webm`.
+
+Record the complete v3 journey with:
+
+```bash
+python scripts/create_v3_video.py
+```
+
+The v3 walkthrough uses real navigation, graph selection, response comparisons, timeline controls, Forensic War Room movement, and UI-styled cards held for at least five seconds. It writes `artifacts/presentation/packetflowai-v3-predictive-defence-tour.webm`.
 
 `python main.py ...` remains available as a compatibility launcher. Live capture requires appropriate packet-capture permissions and Npcap on Windows.
 

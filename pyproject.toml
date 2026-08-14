@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "packetflowai"
-version = "2.3.0"
-description = "Flow-centric, confidence-aware network detection with deterministic HDC"
+version = "3.0.0"
+description = "Predictive cyber defence with a temporal world model and deterministic HDC"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}

@@ -20,6 +20,7 @@
       <button class="nav-chip" data-view="threats">Threats</button>
       <button class="nav-chip" data-view="reasoning">Reasoning</button>
       <button class="nav-chip forensic-nav" data-view="forensics">Forensics</button>
+      <button class="nav-chip command-nav" data-view="command">Command</button>
     </nav>
     <div class="system-state">
       <span class="live-dot" id="live-dot"></span>
@@ -225,10 +226,59 @@
         </section>
       </div>
     </section>
+
+    <section class="command-workspace" data-panel="command" aria-labelledby="command-title">
+      <header class="command-hero">
+        <div><span class="eyebrow">Predictive defence cell / v3</span><h1 id="command-title">Threat world<br><em>in motion.</em></h1></div>
+        <div class="command-posture"><span>Operational posture</span><strong id="command-posture">CALCULATING</strong><small id="command-generated">Awaiting graph synthesis</small></div>
+      </header>
+      <div class="command-grid">
+        <section class="command-module world-module">
+          <header><span>01</span><h2>Threat world model</h2><small id="world-counts">0 nodes / 0 edges</small></header>
+          <div class="world-stage"><canvas id="world-canvas" aria-label="Interactive campaign and entity graph"></canvas><div class="world-radar"></div><p>SELECT AN ENTITY TO TRACE ITS CONNECTIONS</p></div>
+          <div class="world-selection" id="world-selection"><span>ACTIVE ENTITY</span><strong>No evidence loaded</strong><small>The temporal graph will connect hosts, identities, services and techniques.</small></div>
+        </section>
+        <aside class="command-module forecast-module">
+          <header><span>02</span><h2>Next-move prediction</h2><small>30 MINUTE HORIZON</small></header>
+          <div class="campaign-callout"><span>ACTIVE CAMPAIGN</span><strong id="campaign-title">NO CAMPAIGN</strong><p id="campaign-summary">Waiting for correlated activity.</p></div>
+          <div id="prediction-list" class="prediction-list"></div>
+          <div class="forecast-uncertainty"><span>Residual uncertainty</span><strong id="forecast-uncertainty">--</strong></div>
+        </aside>
+        <section class="command-module simulation-module">
+          <header><span>03</span><h2>Counterfactual defence</h2><small>COMPARE BEFORE AUTHORITY</small></header>
+          <div class="simulation-heading"><div><span>SIMULATED TARGET</span><strong id="simulation-target">--</strong></div><p id="simulation-rationale">No active simulation.</p></div>
+          <div id="simulation-options" class="simulation-options"></div>
+        </section>
+        <section class="command-module twin-module">
+          <header><span>04</span><h2>Cyber digital twin</h2><small>BLAST RADIUS</small></header>
+          <div class="twin-orbit"><i></i><i></i><i></i><div><span>PATHS</span><strong id="twin-paths">0</strong><small>REMOVED</small></div></div>
+          <dl class="twin-facts"><div><dt>Recommended</dt><dd id="twin-action">OBSERVE</dd></div><div><dt>Disrupted</dt><dd id="twin-disrupted">0 flows</dd></div><div><dt>Dependency</dt><dd id="twin-dependency">CLEAR</dd></div></dl>
+        </section>
+        <section class="command-module time-module">
+          <header><span>05</span><h2>Evidence time machine</h2><small>KNOWLEDGE AS-OF</small></header>
+          <div class="time-readout"><span>RECONSTRUCTION POINT</span><strong id="time-value">No evidence timestamp</strong></div>
+          <input id="time-slider" type="range" min="0" max="0" value="0" aria-label="Evidence reconstruction point">
+          <div class="time-facts"><article><span>Known flows</span><strong id="time-known-flows">0</strong></article><article><span>Known decisions</span><strong id="time-known-decisions">0</strong></article><article><span>Future hidden</span><strong id="time-future">0</strong></article><article><span>Policy then</span><strong id="time-policy">NORMAL</strong></article></div>
+        </section>
+        <section class="command-module integrity-module">
+          <header><span>06</span><h2>Forensic integrity</h2><small id="integrity-state">UNVERIFIED</small></header>
+          <div class="integrity-seal"><div>PF</div><span>HASH CHAIN</span><strong id="integrity-events">0 SEALED EVENTS</strong></div>
+          <code id="merkle-root">No Merkle root</code><div class="integrity-checks" id="integrity-checks"></div>
+        </section>
+        <section class="command-module authority-module">
+          <header><span>07</span><h2>Authority graph</h2><small>EXPLICIT CONTROL</small></header>
+          <div id="authority-ladder" class="authority-ladder"></div>
+        </section>
+        <section class="command-module capability-module">
+          <header><span>08</span><h2>Defence fabric</h2><small>SUPPORTING SYSTEMS</small></header>
+          <div id="capability-rail" class="capability-rail"></div>
+        </section>
+      </div>
+    </section>
   </main>
 
   <footer class="footer-bar">
-    <span>PacketFlowAI v2.3</span>
+    <span>PacketFlowAI v3.0</span>
     <span>Local evidence remains authoritative</span>
     <span id="footer-mode">Containment disabled</span>
   </footer>

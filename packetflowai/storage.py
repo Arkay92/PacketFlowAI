@@ -1,5 +1,7 @@
 """SQLite evidence and feedback store."""
 
+from __future__ import annotations
+
 import json
 import sqlite3
 from dataclasses import asdict, is_dataclass
@@ -8,6 +10,8 @@ from threading import Lock
 from typing import Any, cast
 
 from .domain import FeedbackRecord
+
+RecordList = list[dict[str, Any]]
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS flows (
@@ -29,6 +33,20 @@ CREATE TABLE IF NOT EXISTS nim_assessments (
 CREATE TABLE IF NOT EXISTS feedback (
     event_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, adjudicated INTEGER NOT NULL,
     analyst_label TEXT, payload TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS world_nodes (
+    node_id TEXT PRIMARY KEY, kind TEXT NOT NULL, updated_at TEXT NOT NULL, payload TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS world_edges (
+    edge_id TEXT PRIMARY KEY, source TEXT NOT NULL, target TEXT NOT NULL,
+    relationship TEXT NOT NULL, updated_at TEXT NOT NULL, payload TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS campaigns (
+    campaign_id TEXT PRIMARY KEY, updated_at TEXT NOT NULL, payload TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sealed_events (
+    sequence INTEGER PRIMARY KEY, event_id TEXT NOT NULL, created_at TEXT NOT NULL,
+    record_hash TEXT UNIQUE NOT NULL, payload TEXT NOT NULL
 );
 """
 
@@ -141,4 +159,66 @@ class EventStore:
             },
             "latest_flow": latest_flow[0] if latest_flow else None,
             "latest_decision": latest_decision[0] if latest_decision else None,
+        }
+
+    def replace_world_model(
+        self,
+        nodes: RecordList,
+        edges: RecordList,
+        campaigns: RecordList,
+        updated_at: str,
+    ) -> None:
+        with self._lock:
+            self._connection.execute("DELETE FROM world_nodes")
+            self._connection.execute("DELETE FROM world_edges")
+            self._connection.execute("DELETE FROM campaigns")
+            self._connection.executemany(
+                "INSERT INTO world_nodes(node_id, kind, updated_at, payload) VALUES (?, ?, ?, ?)",
+                [(node["node_id"], node["kind"], updated_at, _json(node)) for node in nodes],
+            )
+            self._connection.executemany(
+                "INSERT INTO world_edges(edge_id, source, target, relationship, updated_at, payload) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        edge["edge_id"], edge["source"], edge["target"],
+                        edge["relationship"], updated_at, _json(edge),
+                    )
+                    for edge in edges
+                ],
+            )
+            self._connection.executemany(
+                "INSERT INTO campaigns(campaign_id, updated_at, payload) VALUES (?, ?, ?)",
+                [(campaign["campaign_id"], updated_at, _json(campaign)) for campaign in campaigns],
+            )
+            self._connection.commit()
+
+    def replace_sealed_events(self, events: RecordList) -> None:
+        with self._lock:
+            self._connection.execute("DELETE FROM sealed_events")
+            self._connection.executemany(
+                "INSERT INTO sealed_events(sequence, event_id, created_at, record_hash, payload) "
+                "VALUES (?, ?, ?, ?, ?)",
+                [
+                    (
+                        event["sequence"], event["event_id"], event["timestamp"],
+                        event["record_hash"], _json(event),
+                    )
+                    for event in events
+                ],
+            )
+            self._connection.commit()
+
+    def world_model(self) -> dict[str, RecordList]:
+        def records(table: str, order: str) -> RecordList:
+            rows = self._connection.execute(
+                f"SELECT payload FROM {table} ORDER BY {order}"
+            ).fetchall()
+            return [json.loads(row["payload"]) for row in rows]
+
+        return {
+            "nodes": records("world_nodes", "node_id"),
+            "edges": records("world_edges", "edge_id"),
+            "campaigns": records("campaigns", "campaign_id"),
+            "sealed_events": records("sealed_events", "sequence"),
         }

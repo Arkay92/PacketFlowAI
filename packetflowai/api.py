@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .config import AppConfig
+from .intelligence import V3IntelligenceService
 from .registry import FilesystemModelRegistry
 from .storage import EventStore
 from .telemetry import MetricsRegistry
@@ -79,7 +80,7 @@ class APIServer:
                         self._write({
                             "status": "ok",
                             "service": "packetflowai",
-                            "version": "2.3.0",
+                            "version": "3.0.0",
                             "uptime_seconds": (datetime.now(UTC) - outer.started_at).total_seconds(),
                         })
                     elif parsed.path == "/overview":
@@ -112,6 +113,27 @@ class APIServer:
                         })
                     elif parsed.path == "/config":
                         self._write(asdict(outer.config))
+                    elif parsed.path.startswith("/v3/"):
+                        snapshot = V3IntelligenceService(outer.store).snapshot()
+                        resources = {
+                            "/v3/overview": snapshot,
+                            "/v3/world-model": snapshot["world_model"],
+                            "/v3/campaigns": snapshot["campaigns"],
+                            "/v3/next-move": snapshot["predictions"],
+                            "/v3/simulations": snapshot["simulation"],
+                            "/v3/time-machine": snapshot["time_machine"],
+                            "/v3/integrity": snapshot["integrity"],
+                            "/v3/authority": snapshot["authority"],
+                            "/v3/disagreements": snapshot["disagreements"],
+                            "/v3/narrative": snapshot["narrative"],
+                            "/v3/playbook": snapshot["playbook"],
+                            "/v3/capabilities": snapshot["capabilities"],
+                        }
+                        resource = resources.get(parsed.path)
+                        if resource is None:
+                            self._write({"error": "not found"}, status=404)
+                        else:
+                            self._write(resource)
                     else:
                         self._write({"error": "not found"}, status=404)
                 except (ValueError, RuntimeError) as error:
@@ -126,3 +148,4 @@ class APIServer:
     def stop(self) -> None:
         if self.server:
             self.server.shutdown()
+            self.server.server_close()

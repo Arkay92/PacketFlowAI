@@ -15,6 +15,9 @@ const state = {
   lastRefresh: null,
   forensicCases: [],
   forensicIndex: 0,
+  v3: null,
+  worldNodeId: null,
+  simulationAction: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -576,21 +579,113 @@ class NetworkField {
   }
 }
 
+function renderTimeSnapshot(index) {
+  const snapshots = state.v3?.time_machine?.snapshots || [];
+  if (!snapshots.length) return;
+  const snapshot = snapshots[Math.max(0, Math.min(index, snapshots.length - 1))];
+  text("time-value", new Date(snapshot.as_of).toLocaleString());
+  text("time-known-flows", snapshot.known.flows);
+  text("time-known-decisions", snapshot.known.decisions);
+  text("time-future", snapshot.not_yet_known.flows + snapshot.not_yet_known.decisions);
+  text("time-policy", policyName(snapshot.known.policy));
+}
+
+function selectSimulation(action) {
+  state.simulationAction = action;
+  renderCommand();
+}
+
+function renderCommand() {
+  const data = state.v3;
+  if (!data) return;
+  const model = data.world_model || { nodes: [], edges: [], counts: {} };
+  const campaign = data.campaigns?.[0];
+  const assessment = data.predictions?.[0];
+  const simulation = data.simulation || { alternatives: [] };
+  text("command-posture", data.disagreements?.length ? "ANALYST ATTENTION" : campaign ? "PREDICTIVE WATCH" : "NOMINAL WATCH");
+  text("command-generated", `GRAPH SYNTHESIS ${ago(data.generated_at)}`);
+  text("world-counts", `${model.counts?.nodes || 0} nodes / ${model.counts?.edges || 0} edges`);
+  text("campaign-title", campaign?.title || "NO CAMPAIGN");
+  text("campaign-summary", campaign?.summary || "Waiting for correlated activity.");
+  const predictionList = $("prediction-list");
+  predictionList.replaceChildren();
+  (assessment?.predictions || []).forEach((prediction) => {
+    const item = create("article", "prediction");
+    const heading = create("div");
+    heading.append(create("strong", "", prediction.label), create("span", "", percent(prediction.probability)));
+    const meter = create("i"); meter.style.setProperty("--probability", `${prediction.probability * 100}%`);
+    item.append(heading, meter, create("small", "", `${prediction.technique_id} / ${prediction.time_horizon}`));
+    predictionList.append(item);
+  });
+  if (!assessment) predictionList.append(empty("No progression sequence", "More evidence is required.", true));
+  text("forecast-uncertainty", assessment ? percent(assessment.uncertainty) : "--");
+  text("simulation-target", simulation.target || "--");
+  text("simulation-rationale", simulation.rationale || "No active simulation.");
+  const options = $("simulation-options"); options.replaceChildren();
+  const activeAction = state.simulationAction || simulation.recommended_action;
+  (simulation.alternatives || []).forEach((alternative) => {
+    const button = create("button", `simulation-card${alternative.action === activeAction ? " is-active" : ""}`);
+    button.type = "button";
+    button.append(create("span", "", alternative.action === simulation.recommended_action ? "RECOMMENDED" : "ALTERNATIVE"), create("strong", "", alternative.action.replaceAll("_", " ")));
+    const facts = create("dl");
+    [["Risk reduction", percent(alternative.risk_reduction)], ["Business impact", alternative.business_impact], ["Blast radius", alternative.blast_radius]].forEach(([label, value]) => {
+      const row = create("div"); row.append(create("dt", "", label), create("dd", "", value)); facts.append(row);
+    });
+    button.append(facts, create("small", "", `AUTHORITY / ${alternative.authority_required.toUpperCase()}`));
+    button.addEventListener("click", () => selectSimulation(alternative.action));
+    options.append(button);
+  });
+  const selected = (simulation.alternatives || []).find((item) => item.action === activeAction) || simulation.alternatives?.[0];
+  text("twin-paths", selected?.threat_paths_removed || 0); text("twin-action", selected?.action?.replaceAll("_", " ") || "OBSERVE");
+  text("twin-disrupted", `${selected?.legitimate_flows_disrupted || 0} flows`); text("twin-dependency", selected?.critical_dependency_affected ? "AT RISK" : "CLEAR");
+  const snapshots = data.time_machine?.snapshots || [];
+  const slider = $("time-slider"); slider.max = String(Math.max(0, snapshots.length - 1));
+  if (Number(slider.value) > snapshots.length - 1 || slider.dataset.initialized !== "true") slider.value = String(Math.max(0, snapshots.length - 1));
+  slider.dataset.initialized = "true"; renderTimeSnapshot(Number(slider.value));
+  const integrity = data.integrity || {};
+  text("integrity-state", integrity.verified ? "CHAIN VERIFIED" : "CHAIN FAILURE"); text("integrity-events", `${integrity.events || 0} SEALED EVENTS`); text("merkle-root", integrity.merkle_root || "No Merkle root");
+  const checks = $("integrity-checks"); checks.replaceChildren();
+  ["evidence_chain", "decision_record", "model_artifact", "policy_version"].forEach((key) => {
+    const row = create("div", "integrity-check"); row.append(create("span", "", key.replaceAll("_", " ")), create("b", "", integrity[key] || "PENDING")); checks.append(row);
+  });
+  const ladder = $("authority-ladder"); ladder.replaceChildren();
+  (data.authority?.rules || []).forEach((rule) => {
+    const row = create("div", "authority-step"); row.append(create("i", "", rule.level), create("strong", "", rule.action.replaceAll("_", " ")), create("span", "", rule.authority_scope), create("em", "", rule.autonomous ? "AUTONOMOUS" : rule.approver_role)); ladder.append(row);
+  });
+  const rail = $("capability-rail"); rail.replaceChildren();
+  (data.capabilities || []).forEach((capability) => {
+    const row = create("article", "capability"); const copy = create("div"); copy.append(create("strong", "", capability.name), create("small", "", typeof capability.detail === "string" ? capability.detail : "Multiple acceleration tiers")); row.append(create("i"), copy, create("span", "", capability.status)); rail.append(row);
+  });
+}
+
+class WorldField {
+  constructor(canvas) {
+    this.canvas = canvas; this.context = canvas.getContext("2d"); this.points = []; this.phase = 0;
+    this.resize = this.resize.bind(this); this.draw = this.draw.bind(this);
+    new ResizeObserver(this.resize).observe(canvas); canvas.addEventListener("click", (event) => this.select(event)); requestAnimationFrame(this.draw);
+  }
+  resize() { const ratio = window.devicePixelRatio || 1; this.width = this.canvas.clientWidth; this.height = this.canvas.clientHeight; if (!this.width || !this.height) return; this.canvas.width = this.width * ratio; this.canvas.height = this.height * ratio; this.context.setTransform(ratio, 0, 0, ratio, 0, 0); }
+  hash(value) { let result = 2166136261; for (const char of String(value)) result = Math.imul(result ^ char.charCodeAt(0), 16777619); return (result >>> 0) / 4294967295; }
+  select(event) { const bounds = this.canvas.getBoundingClientRect(); const x = event.clientX - bounds.left; const y = event.clientY - bounds.top; const nearest = this.points.reduce((best, point) => { const distance = Math.hypot(point.x - x, point.y - y); return !best || distance < best.distance ? { ...point, distance } : best; }, null); if (nearest?.distance < 28) { state.worldNodeId = nearest.node.node_id; const selection = $("world-selection"); selection.replaceChildren(create("span", "", "ACTIVE ENTITY"), create("strong", "", `${nearest.node.kind} / ${nearest.node.label}`), create("small", "", `${(state.v3.world_model.edges || []).filter((edge) => edge.source === nearest.node.node_id || edge.target === nearest.node.node_id).length} evidence relationships linked to this entity.`)); } }
+  draw() { if (!this.width) this.resize(); if (!this.width || !this.height) { requestAnimationFrame(this.draw); return; } const ctx = this.context; const nodes = (state.v3?.world_model?.nodes || []).slice(0, 70); const edges = state.v3?.world_model?.edges || []; const cx = this.width * .46; const cy = this.height * .5; const radius = Math.min(this.width, this.height) * .42; ctx.clearRect(0, 0, this.width, this.height); this.points = nodes.map((node, index) => { const angle = this.hash(node.node_id) * Math.PI * 2; const ring = node.kind === "FLOW" ? .25 : node.kind === "TECHNIQUE" ? .9 : .48 + this.hash(index) * .35; return { node, x: cx + Math.cos(angle) * radius * ring, y: cy + Math.sin(angle) * radius * ring }; }); const byId = new Map(this.points.map((point) => [point.node.node_id, point])); edges.slice(0, 140).forEach((edge) => { const left = byId.get(edge.source); const right = byId.get(edge.target); if (!left || !right) return; const selected = state.worldNodeId && (edge.source === state.worldNodeId || edge.target === state.worldNodeId); ctx.strokeStyle = selected ? "rgba(255,191,105,.7)" : "rgba(113,201,255,.12)"; ctx.beginPath(); ctx.moveTo(left.x, left.y); ctx.lineTo(right.x, right.y); ctx.stroke(); }); this.points.forEach((point) => { const selected = point.node.node_id === state.worldNodeId; const palette = { SOURCE: "255,107,87", HOST: "255,191,105", ACCOUNT: "211,157,255", TECHNIQUE: "113,201,255", FLOW: "157,246,174" }; const color = palette[point.node.kind] || "205,226,211"; ctx.fillStyle = `rgb(${color})`; ctx.shadowColor = `rgba(${color},.8)`; ctx.shadowBlur = selected ? 18 : 5; ctx.beginPath(); ctx.arc(point.x, point.y, selected ? 6 : point.node.kind === "FLOW" ? 2 : 3.5, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; if (selected || point.node.kind === "TECHNIQUE") { ctx.fillStyle = `rgba(${color},.8)`; ctx.font = "8px monospace"; ctx.fillText(point.node.label.slice(0, 22), point.x + 9, point.y + 3); } }); this.phase += .01; requestAnimationFrame(this.draw); }
+}
+
 async function refresh() {
   if (state.paused) return;
   try {
-    const [health, overview, flows, alerts, decisions, evidence, nim, models, metrics, status] = await Promise.all([
+    const [health, overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v3] = await Promise.all([
       getJSON("/health"), getJSON("/overview"), getJSON("/flows?limit=60"), getJSON("/alerts?limit=20"),
       getJSON("/decisions?limit=60"), getJSON("/evidence?limit=30"), getJSON("/nim?limit=20"),
-      getJSON("/models"), getJSON("/metrics"), getJSON("/status"),
+      getJSON("/models"), getJSON("/metrics"), getJSON("/status"), getJSON("/v3/overview"),
     ]);
-    Object.assign(state, { overview, flows, alerts, decisions, evidence, nim, models, metrics, status });
+    Object.assign(state, { overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v3 });
     state.lastRefresh = new Date();
     $("live-dot").className = "live-dot is-live";
     text("system-state", health.status === "ok" ? "System live" : health.status);
     text("last-sync", `Synced ${state.lastRefresh.toLocaleTimeString()}`);
     renderSummary(); renderFlows(); renderClasses(); renderIncidents(); renderEvidence(); renderModels(); renderRuntime();
     renderForensics();
+    renderCommand();
   } catch (error) {
     $("live-dot").className = "live-dot is-error";
     text("system-state", "API unavailable");
@@ -603,11 +698,13 @@ document.querySelectorAll(".nav-chip").forEach((button) => {
     document.querySelectorAll(".nav-chip").forEach((item) => item.classList.toggle("is-active", item === button));
     $("dashboard").dataset.view = button.dataset.view;
     if (button.dataset.view === "forensics") renderForensics();
+    if (button.dataset.view === "command") renderCommand();
   });
 });
 
 $("forensic-previous").addEventListener("click", () => selectForensicCase(state.forensicIndex - 1));
 $("forensic-next").addEventListener("click", () => selectForensicCase(state.forensicIndex + 1));
+$("time-slider").addEventListener("input", (event) => renderTimeSnapshot(Number(event.target.value)));
 document.addEventListener("keydown", (event) => {
   if ($("dashboard").dataset.view !== "forensics" || event.target.matches("input, textarea, pre")) return;
   if (event.key === "ArrowLeft") selectForensicCase(state.forensicIndex - 1);
@@ -625,5 +722,6 @@ $("pause-button").addEventListener("click", () => {
 setInterval(() => text("field-clock", new Date().toLocaleTimeString("en-GB")), 1000);
 new NetworkField($("network-canvas"));
 new ForensicField($("forensic-canvas"));
+const worldField = new WorldField($("world-canvas"));
 refresh();
 setInterval(refresh, 4000);

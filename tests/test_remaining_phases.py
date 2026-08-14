@@ -381,6 +381,7 @@ class StorageRegistryAndDriftTests(unittest.TestCase):
             overview = json.loads(urlopen(f"http://127.0.0.1:{port}/overview", timeout=2).read())
             dashboard = urlopen(f"http://127.0.0.1:{port}/", timeout=2).read().decode("utf-8")
             stylesheet = urlopen(f"http://127.0.0.1:{port}/static/app.css", timeout=2).read().decode("utf-8")
+            v3 = json.loads(urlopen(f"http://127.0.0.1:{port}/v3/overview", timeout=2).read())
             server.stop()
             thread.join(2)
             store.close()
@@ -390,6 +391,8 @@ class StorageRegistryAndDriftTests(unittest.TestCase):
         self.assertIn("PacketFlowAI // Signal Room", dashboard)
         self.assertIn("Forensic war room", dashboard)
         self.assertIn('data-view="forensics"', dashboard)
+        self.assertIn('data-view="command"', dashboard)
+        self.assertEqual(v3["version"], "3.0.0")
         self.assertIn(".network-stage", stylesheet)
         self.assertIn(".forensics-workspace", stylesheet)
 
