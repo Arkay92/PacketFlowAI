@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .config import AppConfig
 from .intelligence import V3IntelligenceService
+from .platform import PlatformIntelligenceService
 from .registry import FilesystemModelRegistry
 from .storage import EventStore
 from .telemetry import MetricsRegistry
@@ -80,7 +81,7 @@ class APIServer:
                         self._write({
                             "status": "ok",
                             "service": "packetflowai",
-                            "version": "3.0.0",
+                            "version": "4.0.0",
                             "uptime_seconds": (datetime.now(UTC) - outer.started_at).total_seconds(),
                         })
                     elif parsed.path == "/overview":
@@ -134,6 +135,23 @@ class APIServer:
                             self._write({"error": "not found"}, status=404)
                         else:
                             self._write(resource)
+                    elif parsed.path.startswith("/v4/"):
+                        snapshot = PlatformIntelligenceService(outer.store).snapshot()
+                        resources = {
+                            "/v4/overview": snapshot,
+                            "/v4/predictions": snapshot["prediction_v2"],
+                            "/v4/causal": snapshot["causal_v2"],
+                            "/v4/intervention": snapshot["intervention"],
+                            "/v4/digital-twin": snapshot["digital_twin_v2"],
+                            "/v4/time-machine": snapshot["time_machine_v2"],
+                            "/v4/authority": snapshot["authority_v2"],
+                            "/v4/explainability": snapshot["explainability"],
+                            "/v4/runtime": snapshot["runtime_v2"],
+                            "/v4/domains": snapshot["platform_domains"],
+                        }
+                        resource = resources.get(parsed.path)
+                        self._write(resource if resource is not None else {"error": "not found"},
+                                    status=200 if resource is not None else 404)
                     else:
                         self._write({"error": "not found"}, status=404)
                 except (ValueError, RuntimeError) as error:

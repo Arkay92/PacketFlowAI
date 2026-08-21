@@ -18,6 +18,7 @@ const state = {
   v3: null,
   worldNodeId: null,
   simulationAction: null,
+  v4: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -658,6 +659,31 @@ function renderCommand() {
   });
 }
 
+function renderPlatform() {
+  const data = state.v4;
+  if (!data) return;
+  const causal = data.causal_v2 || {};
+  text("causal-link-count", causal.links?.length || 0);
+  text("causal-root", causal.root_cause ? `ROOT / ${causal.root_cause}` : "Root cause unresolved");
+  text("earliest-intervention", causal.earliest_intervention ? new Date(causal.earliest_intervention).toLocaleTimeString() : "--");
+  text("missed-opportunity", causal.missed_opportunity?.detected ? "AUTHORITY DELAY DETECTED" : "No missed opportunity detected");
+  const minimum = data.intervention?.minimum_intervention;
+  text("minimum-intervention", minimum?.action?.replaceAll("_", " ") || "OBSERVE");
+  text("residual-risk", `Residual risk ${safeNumber(minimum?.residual_risk).toFixed(1)}`);
+  const completeness = data.explainability?.completeness || {};
+  text("evidence-completeness", percent(completeness.score || 0));
+  text("missing-context", completeness.missing?.length ? `MISSING / ${completeness.missing.join(" / ")}` : "All required channels present");
+  const domains = $("platform-domains"); domains.replaceChildren();
+  (data.platform_domains || []).forEach((domain) => {
+    const item = create("article", "platform-domain");
+    const copy = create("div"); copy.append(create("strong", "", domain.domain), create("small", "", domain.detail));
+    item.append(copy, create("span", "", domain.status)); domains.append(item);
+  });
+  text("adaptive-batch", data.runtime_v2?.adaptive_batch || 1);
+  text("capture-paths", data.runtime_v2?.capture_backends?.length || 0);
+  text("hindsight-leakage", data.time_machine_v2?.hindsight_leakage?.length || 0);
+}
+
 class WorldField {
   constructor(canvas) {
     this.canvas = canvas; this.context = canvas.getContext("2d"); this.points = []; this.phase = 0;
@@ -673,12 +699,12 @@ class WorldField {
 async function refresh() {
   if (state.paused) return;
   try {
-    const [health, overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v3] = await Promise.all([
+    const [health, overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v4] = await Promise.all([
       getJSON("/health"), getJSON("/overview"), getJSON("/flows?limit=60"), getJSON("/alerts?limit=20"),
       getJSON("/decisions?limit=60"), getJSON("/evidence?limit=30"), getJSON("/nim?limit=20"),
-      getJSON("/models"), getJSON("/metrics"), getJSON("/status"), getJSON("/v3/overview"),
+      getJSON("/models"), getJSON("/metrics"), getJSON("/status"), getJSON("/v4/overview"),
     ]);
-    Object.assign(state, { overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v3 });
+    Object.assign(state, { overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v3: v4, v4 });
     state.lastRefresh = new Date();
     $("live-dot").className = "live-dot is-live";
     text("system-state", health.status === "ok" ? "System live" : health.status);
@@ -686,6 +712,7 @@ async function refresh() {
     renderSummary(); renderFlows(); renderClasses(); renderIncidents(); renderEvidence(); renderModels(); renderRuntime();
     renderForensics();
     renderCommand();
+    renderPlatform();
   } catch (error) {
     $("live-dot").className = "live-dot is-error";
     text("system-state", "API unavailable");
@@ -698,7 +725,7 @@ document.querySelectorAll(".nav-chip").forEach((button) => {
     document.querySelectorAll(".nav-chip").forEach((item) => item.classList.toggle("is-active", item === button));
     $("dashboard").dataset.view = button.dataset.view;
     if (button.dataset.view === "forensics") renderForensics();
-    if (button.dataset.view === "command") renderCommand();
+    if (button.dataset.view === "command") { renderCommand(); renderPlatform(); }
   });
 });
 

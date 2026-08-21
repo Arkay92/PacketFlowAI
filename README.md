@@ -1,6 +1,6 @@
-# PacketFlowAI
+# PacketFlowAI v4
 
-PacketFlowAI is a predictive cyber-defence prototype built around a temporal threat world model, deterministic hyperdimensional encoding, local neural/prototype/anomaly evidence, optional bounded NVIDIA NIM reasoning, and an explicit authority graph. Live capture and PCAP replay use the same flow, detection, fusion, policy, evidence, and campaign pipeline.
+PacketFlowAI is a provable collective cyber-defence prototype built around a temporal threat world model, deterministic hyperdimensional encoding, independent forensic verification, local neural/prototype/anomaly evidence, optional bounded NVIDIA NIM reasoning, and an explicit authority graph. Live capture and PCAP replay use the same flow, detection, fusion, policy, evidence, and campaign pipeline.
 
 ## Features
 
@@ -19,6 +19,9 @@ PacketFlowAI is a predictive cyber-defence prototype built around a temporal thr
 - Counterfactual response simulation and digital-twin blast-radius analysis
 - Evidence time reconstruction, hash-chain sealing, Merkle verification, and explicit action authority
 - Multi-sensor adapters, threat memory, guarded continual prototypes, federated consensus, and bounded playbooks
+- Portable `.pfcase` evidence bundles and the independent `packetflow-verifier` package
+- OCSF, STIX 2.1, TAXII, Sigma, SIEM, OpenTelemetry, and case-management interoperability
+- Causal reasoning, intervention optimisation, adversarial assurance, adaptive sensing, and Linux fast paths
 
 ## Installation
 1. Clone the repository.
@@ -79,6 +82,15 @@ The **Forensics** view isolates orange and red packet conversations for deeper a
 
 The **Command** view is the v3 predictive-defence cell. Navigate the temporal threat graph, inspect campaign and next-move assessments, compare counterfactual responses, rewind the evidence timeline, verify the sealed forensic chain, and inspect exactly where autonomous authority ends.
 
+The v4 **Assurance Deck** extends Command with causal links, earliest intervention, minimum safe intervention, missing sensor context, adaptive runtime posture, and implementation-domain status.
+
+Verify a portable case without importing or trusting the PacketFlowAI application package:
+
+```bash
+packetflow-verifier verify case.pfcase
+packetflow-verifier replay-decision case.pfcase --decision PF-1234
+```
+
 Create the guided Signal Room presentation video with Playwright:
 
 ```bash
@@ -105,6 +117,14 @@ python scripts/create_v3_video.py
 
 The v3 walkthrough uses real navigation, graph selection, response comparisons, timeline controls, Forensic War Room movement, and UI-styled cards held for at least five seconds. It writes `artifacts/presentation/packetflowai-v3-predictive-defence-tour.webm`.
 
+Record the v4 provable collective-defence walkthrough with:
+
+```bash
+python scripts/create_v4_video.py
+```
+
+The v4 tour adds the Assurance Deck, independent-verification story, collective-defence matrix, and new interoperability, learning, robustness, and runtime capabilities. It writes `artifacts/presentation/packetflowai-v4-collective-defence-tour.webm`.
+
 `python main.py ...` remains available as a compatibility launcher. Live capture requires appropriate packet-capture permissions and Npcap on Windows.
 
 ## Configuration
@@ -125,6 +145,7 @@ Configuration is defined in `packetflowai/config.py`. Common runtime overrides a
 NIM is disabled by default. Its self-reported reasoning strength is not a calibrated probability, it cannot invoke enforcement, and its assessments cannot become training labels. Generated checkpoints, registry state, databases, reports, and logs live under `artifacts/` and are excluded from Git. Legacy state-dict-only checkpoints intentionally fail manifest validation.
 
 See [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), and [benchmark methodology](docs/BENCHMARKS.md).
+The [next-iteration architecture](docs/NEXT_ITERATION.md) describes the v4 capability boundaries and operational prerequisites.
 
 ## Contributing
 

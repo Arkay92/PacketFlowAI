@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "packetflowai"
-version = "3.0.0"
-description = "Predictive cyber defence with a temporal world model and deterministic HDC"
+version = "4.0.0"
+description = "Provable collective cyber defence with a temporal world model and deterministic HDC"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
@@ -29,9 +29,10 @@ presentation = [
 
 [project.scripts]
 packetflowai = "packetflowai.cli:main"
+packetflow-verifier = "packetflow_verifier.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["packetflowai*"]
+include = ["packetflowai*", "packetflow_verifier*"]
 
 [tool.setuptools.package-data]
 packetflowai = ["static/*.html", "static/*.css", "static/*.js"]
