@@ -65,6 +65,10 @@ class EvidenceBundleExporter:
         reproducibility: dict[str, Any],
         witness_keys: dict[str, str] | None = None,
         anchor: FileTransparencyLog | None = None,
+        assurance: dict[str, Any] | None = None,
+        evidence_contract: dict[str, Any] | None = None,
+        trust_material: dict[str, Any] | None = None,
+        signer: tuple[str, str] | None = None,
     ) -> dict[str, Any]:
         files: dict[str, bytes] = {}
         mapping = {
@@ -81,27 +85,83 @@ class EvidenceBundleExporter:
                 files[name] = b"\n".join(canonical_json(item) for item in values) + (b"\n" if values else b"")
             else:
                 files[name] = canonical_json(values)
+        events = records.get("events", [])
+        files["case.json"] = canonical_json({"case_id": case_id, "record_count": len(events)})
+        files["evidence/events.jsonl"] = files["events.jsonl"]
+        files["evidence/observations.jsonl"] = b"\n".join(
+            canonical_json(item) for item in records.get("observations", events)
+        ) + (b"\n" if records.get("observations", events) else b"")
+        files["evidence/sources.json"] = canonical_json(records.get("sources", []))
+        files["evidence/receipts.jsonl"] = b"\n".join(canonical_json(item) for item in records.get("receipts", [])) + (
+            b"\n" if records.get("receipts") else b""
+        )
+        files["commitments/epochs.json"] = canonical_json(records.get("epochs", []))
+        files["commitments/sequence-roots.json"] = canonical_json(records.get("sequence_roots", []))
+        files["authority/records.jsonl"] = files["authority/records.jsonl"]
+        files["attestations/collectors.json"] = canonical_json(records.get("attestations", []))
+        files["attestations/reasoning-receipts.json"] = canonical_json(records.get("reasoning_receipts", []))
+        files["anchors/checkpoints.json"] = canonical_json(records.get("checkpoints", []))
+        files["omissions/ledger.jsonl"] = b"\n".join(canonical_json(item) for item in records.get("omissions", [])) + (
+            b"\n" if records.get("omissions") else b""
+        )
+        files["redactions/leaves.json"] = canonical_json(records.get("redactions", []))
+        files["decisions/capsules.json"] = canonical_json(records.get("capsules", []))
+        files["evidence/transformations.jsonl"] = b"\n".join(
+            canonical_json(item) for item in records.get("transformations", [])
+        ) + (b"\n" if records.get("transformations") else b"")
+        files["omissions/destruction-receipts.json"] = canonical_json(records.get("destruction_receipts", []))
+        files["signatures/trust-material.json"] = canonical_json(trust_material or {})
+        files["contracts/evidence-contract.json"] = canonical_json(evidence_contract or {})
+        files["verification.json"] = canonical_json(
+            assurance
+            or {
+                "integrity": "UNKNOWN",
+                "inclusion": "UNKNOWN",
+                "sequence_continuity": "UNKNOWN",
+                "unknown_omission_risk": "NOT_ELIMINATED",
+            }
+        )
         files["models/reproducibility.json"] = canonical_json(reproducibility)
         files["hashes/chain.json"] = canonical_json(
             [{key: value for key, value in event.__dict__.items()} for event in ledger.events]
         )
         hashes = {name: _digest(data) for name, data in files.items()}
         root = _merkle([hashes[name] for name in sorted(hashes)])
+        files["commitments/merkle-roots.json"] = canonical_json(
+            {
+                "case_root": root,
+                "algorithm": "SHA-256",
+                "leaf_order": sorted(hashes),
+            }
+        )
+        hashes["commitments/merkle-roots.json"] = _digest(files["commitments/merkle-roots.json"])
+        root = _merkle([hashes[name] for name in sorted(hashes)])
         witnesses = {
             name: hmac.new(secret.encode(), root.encode(), hashlib.sha256).hexdigest()
             for name, secret in (witness_keys or {}).items()
         }
         receipt = anchor.anchor(root) if anchor else None
-        manifest = {
-            "bundle_version": "1.0",
+        manifest: dict[str, Any] = {
+            "bundle_version": "PFCASE-1.0",
+            "schema": "https://packetflow.ai/spec/pfcase/1.0",
             "case_id": case_id,
             "created_at": datetime.now(UTC).isoformat(),
             "files": hashes,
             "merkle_root": root,
             "witnesses": witnesses,
             "external_anchor": receipt,
-            "algorithms": {"digest": "SHA-256", "witness": "HMAC-SHA256", "canonical": "RFC8785-like JSON"},
+            "assurance_claims": (assurance or {}).get("formal_claims", []),
+            "unknown_omission_risk": (assurance or {}).get("unknown_omission_risk", "NOT_ELIMINATED"),
+            "algorithms": {"digest": "SHA-256", "witness": "HMAC-SHA256", "canonical": "PF-CANONICAL-JSON-1"},
         }
+        if signer:
+            key_id, secret = signer
+            unsigned = dict(manifest)
+            manifest["manifest_signature"] = {
+                "key_id": key_id,
+                "algorithm": "HMAC-SHA256",
+                "value": hmac.new(secret.encode(), canonical_json(unsigned), hashlib.sha256).hexdigest(),
+            }
         output.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, data in files.items():

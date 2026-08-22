@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://packetflow.ai/spec/pfcase/1.0",
+  "title": "PFCASE 1.0 Manifest",
+  "type": "object",
+  "required": ["bundle_version", "case_id", "created_at", "files", "merkle_root", "algorithms", "unknown_omission_risk"],
+  "properties": {
+    "bundle_version": {"const": "PFCASE-1.0"},
+    "case_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "merkle_root": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "unknown_omission_risk": {"const": "NOT_ELIMINATED"},
+    "manifest_signature": {
+      "type": "object",
+      "required": ["key_id", "algorithm", "value"]
+    }
+  },
+  "additionalProperties": true
+}
+

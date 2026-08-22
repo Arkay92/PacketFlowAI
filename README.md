@@ -1,6 +1,6 @@
-# PacketFlowAI v4
+# PacketFlowAI v5 - Verifiable Assurance
 
-PacketFlowAI is a provable collective cyber-defence prototype built around a temporal threat world model, deterministic hyperdimensional encoding, independent forensic verification, local neural/prototype/anomaly evidence, optional bounded NVIDIA NIM reasoning, and an explicit authority graph. Live capture and PCAP replay use the same flow, detection, fusion, policy, evidence, and campaign pipeline.
+PacketFlowAI is a verifiable-assurance cyber-defence prototype. It separates threat confidence from evidence integrity, inclusion, sequence continuity, expected-source coverage, reproducibility, and unknown omission risk. Live capture and PCAP replay use the same flow, detection, fusion, policy, evidence, campaign, and assurance pipeline.
 
 ## Features
 
@@ -22,6 +22,10 @@ PacketFlowAI is a provable collective cyber-defence prototype built around a tem
 - Portable `.pfcase` evidence bundles and the independent `packetflow-verifier` package
 - OCSF, STIX 2.1, TAXII, Sigma, SIEM, OpenTelemetry, and case-management interoperability
 - Causal reasoning, intervention optimisation, adversarial assurance, adaptive sensing, and Linux fast paths
+- Signed/versioned Evidence Contracts, producer sequences, epoch counts, heartbeats, dark-period detection, and ingest receipts
+- Witness reconciliation, multi-service checkpoints, omission/redaction ledgers, lifecycle provenance, and trust-root history
+- PFCASE 1.0 formal claims, inclusion proofs, decision capsules/autopsy, challenge mode, and local-only browser verification
+- Assurance-aware authority, observation-plane modeling, sensor-suppression signals, and an interactive Assurance War Room
 
 ## Installation
 1. Clone the repository.
@@ -82,14 +86,20 @@ The **Forensics** view isolates orange and red packet conversations for deeper a
 
 The **Command** view is the v3 predictive-defence cell. Navigate the temporal threat graph, inspect campaign and next-move assessments, compare counterfactual responses, rewind the evidence timeline, verify the sealed forensic chain, and inspect exactly where autonomous authority ends.
 
-The v4 **Assurance Deck** extends Command with causal links, earliest intervention, minimum safe intervention, missing sensor context, adaptive runtime posture, and implementation-domain status.
+The v5 **Assurance** view is a separate evidence war room. It exposes the assurance vector, proof path, source heatmap, recording-path loss, formal claims, re-derivation boundary, known blind spots, assurance debt, authority degradation, Evidence Contract, and witness state. Imperfect numbers are intentional: integrity is not completeness.
 
 Verify a portable case without importing or trusting the PacketFlowAI application package:
 
 ```bash
 packetflow-verifier verify case.pfcase
 packetflow-verifier replay-decision case.pfcase --decision PF-1234
+packetflow-verifier decision-autopsy case.pfcase --decision PF-1234
+packetflow-verifier inclusion-proof case.pfcase --file evidence/events.jsonl
+packetflow-verifier challenge case.pfcase
+packetflow-verifier audit-resource case.pfcase evidence-contract
 ```
+
+PFCASE 1.0 is documented in [the open format specification](docs/PFCASE_SPEC.md), with the [formal claim dictionary](docs/ASSURANCE_CLAIMS.md), [JSON schema](docs/pfcase-1.0.schema.json), and [verification vectors](test-vectors/README.md). The standalone assets under `packetflow_verifier/web/` verify a dropped bundle locally in a browser; no evidence is uploaded and PacketFlowAI does not need to be running.
 
 Create the guided Signal Room presentation video with Playwright:
 
@@ -125,6 +135,14 @@ python scripts/create_v4_video.py
 
 The v4 tour adds the Assurance Deck, independent-verification story, collective-defence matrix, and new interoperability, learning, robustness, and runtime capabilities. It writes `artifacts/presentation/packetflowai-v4-collective-defence-tour.webm`.
 
+Record the v5 Verifiable Assurance walkthrough with:
+
+```bash
+python scripts/create_v5_video.py
+```
+
+The v5 tour interactively follows the assurance vector, proof path, dark-period heatmap, observation graph, formal claims, re-derivation boundary, authority degradation, evidence challenge lab, signed contract, witnesses, and Forensics journey. It writes `artifacts/presentation/packetflowai-v5-verifiable-assurance-tour.webm`.
+
 `python main.py ...` remains available as a compatibility launcher. Live capture requires appropriate packet-capture permissions and Npcap on Windows.
 
 ## Configuration
@@ -144,8 +162,7 @@ Configuration is defined in `packetflowai/config.py`. Common runtime overrides a
 
 NIM is disabled by default. Its self-reported reasoning strength is not a calibrated probability, it cannot invoke enforcement, and its assessments cannot become training labels. Generated checkpoints, registry state, databases, reports, and logs live under `artifacts/` and are excluded from Git. Legacy state-dict-only checkpoints intentionally fail manifest validation.
 
-See [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), and [benchmark methodology](docs/BENCHMARKS.md).
-The [next-iteration architecture](docs/NEXT_ITERATION.md) describes the v4 capability boundaries and operational prerequisites.
+See [architecture](docs/ARCHITECTURE.md), [v5 architecture](docs/V5_ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), and [benchmark methodology](docs/BENCHMARKS.md).
 
 ## Contributing
 

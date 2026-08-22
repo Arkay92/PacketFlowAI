@@ -1,0 +1,12 @@
+[
+  {"id":"valid-case","mutation":"none","expect":"VERIFIED"},
+  {"id":"modified-event","mutation":"alter evidence/events.jsonl","expect":"HASH_MISMATCH"},
+  {"id":"missing-event","mutation":"remove declared evidence file","expect":"MISSING_FILE"},
+  {"id":"broken-sequence","mutation":"remove producer sequence","expect":"PARTIAL_CONTINUITY"},
+  {"id":"invalid-signature","mutation":"replace manifest signature","expect":"INVALID_SIGNATURE"},
+  {"id":"wrong-model","mutation":"replace model artifact","expect":"HASH_MISMATCH"},
+  {"id":"missing-source","mutation":"remove contract source contribution","expect":"PARTIAL_COVERAGE"},
+  {"id":"redacted-case","mutation":"replace content with declared redacted leaf","expect":"VERIFIED_WITH_REDACTION"},
+  {"id":"bad-anchor","mutation":"replace checkpoint root","expect":"INVALID_ANCHOR"},
+  {"id":"split-view-case","mutation":"publish conflicting witness roots","expect":"SPLIT_VIEW"}
+]

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from .assurance import AssuranceService
 from .config import AppConfig
 from .intelligence import V3IntelligenceService
 from .platform import PlatformIntelligenceService
@@ -28,8 +29,15 @@ def _serializable(value: Any) -> Any:
 
 
 class APIServer:
-    def __init__(self, config: AppConfig, store: EventStore, metrics: MetricsRegistry,
-                 registry: FilesystemModelRegistry, host: str = "127.0.0.1", port: int = 8080):
+    def __init__(
+        self,
+        config: AppConfig,
+        store: EventStore,
+        metrics: MetricsRegistry,
+        registry: FilesystemModelRegistry,
+        host: str = "127.0.0.1",
+        port: int = 8080,
+    ):
         self.config = config
         self.store = store
         self.metrics = metrics
@@ -47,9 +55,14 @@ class APIServer:
                 return
 
             def _write(self, payload: Any, status: int = 200, content_type: str = "application/json") -> None:
-                body = payload if isinstance(payload, bytes) else (
-                    payload.encode("utf-8") if isinstance(payload, str) else
-                    json.dumps(_serializable(payload), sort_keys=True).encode("utf-8")
+                body = (
+                    payload
+                    if isinstance(payload, bytes)
+                    else (
+                        payload.encode("utf-8")
+                        if isinstance(payload, str)
+                        else json.dumps(_serializable(payload), sort_keys=True).encode("utf-8")
+                    )
                 )
                 self.send_response(status)
                 self.send_header("Content-Type", content_type)
@@ -78,12 +91,14 @@ class APIServer:
                 try:
                     limit = min(max(int(parse_qs(parsed.query).get("limit", ["100"])[0]), 1), 1000)
                     if parsed.path == "/health":
-                        self._write({
-                            "status": "ok",
-                            "service": "packetflowai",
-                            "version": "4.0.0",
-                            "uptime_seconds": (datetime.now(UTC) - outer.started_at).total_seconds(),
-                        })
+                        self._write(
+                            {
+                                "status": "ok",
+                                "service": "packetflowai",
+                                "version": "5.0.0",
+                                "uptime_seconds": (datetime.now(UTC) - outer.started_at).total_seconds(),
+                            }
+                        )
                     elif parsed.path == "/overview":
                         self._write(outer.store.overview())
                     elif parsed.path == "/metrics":
@@ -105,13 +120,15 @@ class APIServer:
                     elif parsed.path == "/models":
                         self._write(outer.registry.list_models())
                     elif parsed.path == "/status":
-                        self._write({
-                            "nim_mode": outer.config.nim.mode,
-                            "containment_enabled": False,
-                            "artifact_root": str(outer.config.artifacts.root),
-                            "encoder_seed": outer.config.model.encoder_seed,
-                            "model_version": outer.config.model.model_version,
-                        })
+                        self._write(
+                            {
+                                "nim_mode": outer.config.nim.mode,
+                                "containment_enabled": False,
+                                "artifact_root": str(outer.config.artifacts.root),
+                                "encoder_seed": outer.config.model.encoder_seed,
+                                "model_version": outer.config.model.model_version,
+                            }
+                        )
                     elif parsed.path == "/config":
                         self._write(asdict(outer.config))
                     elif parsed.path.startswith("/v3/"):
@@ -150,8 +167,53 @@ class APIServer:
                             "/v4/domains": snapshot["platform_domains"],
                         }
                         resource = resources.get(parsed.path)
-                        self._write(resource if resource is not None else {"error": "not found"},
-                                    status=200 if resource is not None else 404)
+                        self._write(
+                            resource if resource is not None else {"error": "not found"},
+                            status=200 if resource is not None else 404,
+                        )
+                    elif parsed.path.startswith("/v5/") or parsed.path.startswith("/audit/v1/"):
+                        snapshot = AssuranceService(outer.store).snapshot()
+                        resources = {
+                            "/v5/overview": snapshot,
+                            "/v5/assurance": snapshot,
+                            "/v5/claims": snapshot["formal_claims"],
+                            "/v5/contract": snapshot["contract"],
+                            "/v5/continuity": snapshot["continuity_by_source"],
+                            "/v5/omissions": snapshot["omission_ledger"],
+                            "/v5/witnesses": snapshot["witness_reconciliation"],
+                            "/v5/observation-world": snapshot["observation_world"],
+                            "/v5/attack-lab": snapshot["attack_lab"],
+                            "/v5/assurance-report": {
+                                key: snapshot[key]
+                                for key in (
+                                    "integrity",
+                                    "inclusion",
+                                    "sequence_continuity",
+                                    "expected_sources",
+                                    "observed_sources",
+                                    "known_gaps",
+                                    "unknown_omission_risk",
+                                    "assurance_level",
+                                )
+                            },
+                            "/audit/v1/manifest": {
+                                "schema": "PFCASE-1.0",
+                                "algorithms": ["SHA-256", "PF-CANONICAL-JSON-1"],
+                            },
+                            "/audit/v1/public-keys": {"active": ["assurance-policy-root"], "history": "published"},
+                            "/audit/v1/schema": {"identifier": "https://packetflow.ai/spec/pfcase/1.0"},
+                            "/audit/v1/inclusion-proof": {"status": "AVAILABLE_IN_PFCASE", "algorithm": "SHA-256"},
+                            "/audit/v1/consistency-proof": snapshot["witness_reconciliation"],
+                            "/audit/v1/checkpoint": snapshot["epoch_manifests"][0]
+                            if snapshot["epoch_manifests"]
+                            else {},
+                            "/audit/v1/evidence-contract": snapshot["contract"],
+                        }
+                        resource = resources.get(parsed.path)
+                        self._write(
+                            resource if resource is not None else {"error": "not found"},
+                            status=200 if resource is not None else 404,
+                        )
                     else:
                         self._write({"error": "not found"}, status=404)
                 except (ValueError, RuntimeError) as error:

@@ -302,7 +302,7 @@ class ExplainabilityEngine:
         ]
         return sorted(values, key=lambda item: abs(item["contribution"]), reverse=True)
 
-    def completeness(self, channels: Mapping[str, Any]) -> dict[str, Any]:
+    def coverage(self, channels: Mapping[str, Any]) -> dict[str, Any]:
         required = {"network", "identity", "endpoint", "dns", "threat_intel"}
         present = {key for key, value in channels.items() if value is not None}
         return {
@@ -311,7 +311,12 @@ class ExplainabilityEngine:
             "suggested_questions": [
                 f"Can we acquire {item.replace('_', ' ')} context?" for item in sorted(required - present)
             ],
+            "unknown_omission_risk": "NOT_ELIMINATED",
         }
+
+    def completeness(self, channels: Mapping[str, Any]) -> dict[str, Any]:
+        """Compatibility alias; callers must present this as expected-source coverage."""
+        return self.coverage(channels)
 
     def similar_incidents(
         self, vector: np.ndarray, incidents: Mapping[str, np.ndarray], limit: int = 5

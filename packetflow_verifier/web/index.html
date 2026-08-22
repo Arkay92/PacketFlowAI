@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PacketFlow Independent Verifier</title>
+  <link rel="stylesheet" href="verifier.css">
+</head>
+<body>
+  <main>
+    <header><span class="mark">PFV</span><div><strong>PacketFlow Independent Verifier</strong><small>PFCASE 1.0 / local-only verification</small></div></header>
+    <section class="hero">
+      <span>NO PACKETFLOWAI RUNTIME REQUIRED</span>
+      <h1>Do not trust<br><em>the record.</em></h1>
+      <p>Verify what the supplied evidence can prove, what is missing, and what remains unknowable.</p>
+    </section>
+    <label class="drop" id="drop-zone">
+      <input id="bundle" type="file" accept=".pfcase,.zip">
+      <span>DROP .PFCASE HERE</span>
+      <strong>Evidence stays in this browser.</strong>
+      <small>SHA-256, manifest, file commitments, Merkle root, and assurance claims are evaluated locally.</small>
+    </label>
+    <section class="results" id="results" hidden>
+      <header><span>CASE</span><strong id="case-id">--</strong><small id="case-state">VERIFYING</small></header>
+      <div id="checks" class="checks"></div>
+      <div class="boundary"><article><span>MISSING EXPECTED SOURCES</span><strong id="missing-sources">--</strong></article><article><span>UNKNOWN OMISSION RISK</span><strong id="unknown-risk">NOT ELIMINATED</strong></article></div>
+    </section>
+    <p class="error" id="error" role="alert"></p>
+  </main>
+  <script src="verifier.js"></script>
+</body>
+</html>
+

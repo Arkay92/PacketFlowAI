@@ -21,6 +21,7 @@
       <button class="nav-chip" data-view="reasoning">Reasoning</button>
       <button class="nav-chip forensic-nav" data-view="forensics">Forensics</button>
       <button class="nav-chip command-nav" data-view="command">Command</button>
+      <button class="nav-chip assurance-nav" data-view="assurance">Assurance</button>
     </nav>
     <div class="system-state">
       <span class="live-dot" id="live-dot"></span>
@@ -279,7 +280,7 @@
             <article><span>CAUSAL LINKS</span><strong id="causal-link-count">0</strong><small id="causal-root">Root cause unresolved</small></article>
             <article><span>EARLIEST INTERVENTION</span><strong id="earliest-intervention">--</strong><small id="missed-opportunity">No missed opportunity detected</small></article>
             <article><span>MINIMUM INTERVENTION</span><strong id="minimum-intervention">OBSERVE</strong><small id="residual-risk">Residual risk --</small></article>
-            <article><span>EVIDENCE COMPLETENESS</span><strong id="evidence-completeness">0%</strong><small id="missing-context">Awaiting sensor context</small></article>
+            <article><span>EXPECTED-SOURCE COVERAGE</span><strong id="evidence-coverage">0%</strong><small id="missing-context">Awaiting sensor context</small></article>
           </div>
         </section>
         <section class="command-module platform-module">
@@ -289,11 +290,88 @@
         </section>
       </div>
     </section>
+
+    <section class="assurance-workspace" data-panel="assurance" aria-labelledby="assurance-title">
+      <header class="assurance-hero">
+        <div><span class="eyebrow">Verifiable assurance / v5</span><h1 id="assurance-title">Know what you<br><em>can prove.</em></h1></div>
+        <div class="assurance-level"><span>ASSURANCE LEVEL</span><strong id="assurance-level">A0</strong><small id="assurance-profile">CALCULATING TRUST BOUNDARY</small></div>
+        <div class="risk-duality"><article><span>THREAT RISK</span><strong id="assurance-threat-risk">--</strong></article><article><span>EVIDENCE ASSURANCE</span><strong id="assurance-risk">--</strong></article></div>
+      </header>
+
+      <div class="assurance-war-grid">
+        <section class="assurance-panel vector-panel">
+          <header><span>01</span><h2>Evidence assurance vector</h2><small>WHAT TRUST WAS EARNED</small></header>
+          <div id="assurance-vector" class="assurance-vector"></div>
+          <div class="omission-warning"><span>UNKNOWN OMISSION RISK</span><strong id="omission-risk">NOT EVALUATED</strong><p>Absence outside expected recording paths cannot be disproved by the record alone.</p></div>
+        </section>
+
+        <section class="assurance-panel proof-panel">
+          <header><span>02</span><h2>Proof explorer</h2><small>WHY IS THIS VERIFIED?</small></header>
+          <div id="proof-path" class="proof-path"></div>
+          <div class="proof-inspector"><span>ACTIVE PROOF</span><strong id="proof-active">SELECT A PROOF STEP</strong><code id="proof-digest">awaiting committed material</code></div>
+        </section>
+
+        <section class="assurance-panel heatmap-panel">
+          <header><span>03</span><h2>Observation heatmap</h2><small>SENSOR DARK-PERIOD DETECTION</small></header>
+          <div id="assurance-heatmap" class="assurance-heatmap"></div>
+          <div id="dark-period-detail" class="dark-period-detail"><span>SELECT A DARK CELL</span><strong>Recording-path visibility over time</strong><p>Live cells establish liveness only for the declared source and interval.</p></div>
+        </section>
+
+        <section class="assurance-panel observation-panel">
+          <header><span>04</span><h2>Assurance world model</h2><small>THE MACHINERY OBSERVING REALITY</small></header>
+          <div class="observation-stage"><canvas id="assurance-world-canvas" aria-label="Observation-plane assurance graph"></canvas><div class="observation-reticle"></div></div>
+          <div id="observation-chain" class="observation-chain"></div>
+        </section>
+
+        <section class="assurance-panel path-panel">
+          <header><span>05</span><h2>Recording path</h2><small>PRODUCED TO COMMITTED</small></header>
+          <div id="recording-path" class="recording-path"></div>
+          <p class="path-limitation" id="assurance-limitation">Count anchoring detects removal of committed events. It does not prove that an event was generated before commitment.</p>
+        </section>
+
+        <section class="assurance-panel claims-panel">
+          <header><span>06</span><h2>Formal assurance claims</h2><small>STRICTLY SCOPED STATEMENTS</small></header>
+          <div id="formal-claims" class="formal-claims"></div>
+        </section>
+
+        <section class="assurance-panel know-panel">
+          <header><span>07</span><h2>What we know</h2><small>SUPPORTED BY THE RECORD</small></header>
+          <div id="what-we-know" class="boundary-list positive"></div>
+        </section>
+
+        <section class="assurance-panel unknown-panel">
+          <header><span>08</span><h2>What we cannot prove</h2><small>TRUST BOUNDARY</small></header>
+          <div id="what-we-cannot-prove" class="boundary-list negative"></div>
+        </section>
+
+        <section class="assurance-panel rederive-panel">
+          <header><span>09</span><h2>Re-derivation boundary</h2><small>REPRODUCED VS RECORDED</small></header>
+          <div id="rederivation-status" class="rederivation-status"></div>
+        </section>
+
+        <section class="assurance-panel authority-assurance-panel">
+          <header><span>10</span><h2>Assurance-aware authority</h2><small>WEAK EVIDENCE WEAKENS PERMISSION</small></header>
+          <div id="assurance-authority" class="assurance-authority"></div>
+          <div id="assurance-debt" class="assurance-debt"></div>
+        </section>
+
+        <section class="assurance-panel attack-record-panel">
+          <header><span>11</span><h2>Attack the attack record</h2><small>EVIDENCE CHAOS LAB</small></header>
+          <div id="assurance-attack-lab" class="assurance-attack-lab"></div>
+        </section>
+
+        <section class="assurance-panel contract-panel">
+          <header><span>12</span><h2>Evidence contract</h2><small>SIGNED BEFORE THE INCIDENT</small></header>
+          <div id="evidence-contract" class="evidence-contract"></div>
+          <div id="witness-status" class="witness-status"></div>
+        </section>
+      </div>
+    </section>
   </main>
 
   <footer class="footer-bar">
-    <span>PacketFlowAI v4.0</span>
-    <span>Local evidence remains authoritative</span>
+    <span>PacketFlowAI v5.0</span>
+    <span>Integrity is not completeness</span>
     <span id="footer-mode">Containment disabled</span>
   </footer>
   <script src="/static/app.js" defer></script>

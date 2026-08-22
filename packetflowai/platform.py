@@ -71,7 +71,7 @@ class PlatformIntelligenceService:
             },
             "explainability": {
                 "why_graph": ExplainabilityEngine().why_graph(latest),
-                "completeness": ExplainabilityEngine().completeness(
+                "expected_source_coverage": ExplainabilityEngine().coverage(
                     {
                         "network": bool(flows),
                         "identity": None,

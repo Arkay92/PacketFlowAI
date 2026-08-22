@@ -3,7 +3,7 @@
 from .features import FEATURE_SCHEMA_VERSION, PacketFeatures
 from .hdc import ENCODER_SCHEMA_VERSION, HypervectorEncoder
 
-__version__ = "4.0.0"
+__version__ = "5.0.0"
 
 __all__ = [
     "ENCODER_SCHEMA_VERSION",

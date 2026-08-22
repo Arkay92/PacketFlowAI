@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "packetflowai"
-version = "4.0.0"
-description = "Provable collective cyber defence with a temporal world model and deterministic HDC"
+version = "5.0.0"
+description = "Verifiable cyber evidence assurance with independent PFCASE verification"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
@@ -36,6 +36,7 @@ include = ["packetflowai*", "packetflow_verifier*"]
 
 [tool.setuptools.package-data]
 packetflowai = ["static/*.html", "static/*.css", "static/*.js"]
+packetflow_verifier = ["web/*.html", "web/*.css", "web/*.js"]
 
 [tool.ruff]
 target-version = "py311"

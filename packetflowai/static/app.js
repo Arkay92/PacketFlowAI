@@ -19,6 +19,7 @@ const state = {
   worldNodeId: null,
   simulationAction: null,
   v4: null,
+  v5: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -670,9 +671,9 @@ function renderPlatform() {
   const minimum = data.intervention?.minimum_intervention;
   text("minimum-intervention", minimum?.action?.replaceAll("_", " ") || "OBSERVE");
   text("residual-risk", `Residual risk ${safeNumber(minimum?.residual_risk).toFixed(1)}`);
-  const completeness = data.explainability?.completeness || {};
-  text("evidence-completeness", percent(completeness.score || 0));
-  text("missing-context", completeness.missing?.length ? `MISSING / ${completeness.missing.join(" / ")}` : "All required channels present");
+  const coverage = data.explainability?.expected_source_coverage || {};
+  text("evidence-coverage", percent(coverage.score || 0));
+  text("missing-context", coverage.missing?.length ? `MISSING / ${coverage.missing.join(" / ")}` : "All contract sources present");
   const domains = $("platform-domains"); domains.replaceChildren();
   (data.platform_domains || []).forEach((domain) => {
     const item = create("article", "platform-domain");
@@ -682,6 +683,108 @@ function renderPlatform() {
   text("adaptive-batch", data.runtime_v2?.adaptive_batch || 1);
   text("capture-paths", data.runtime_v2?.capture_backends?.length || 0);
   text("hindsight-leakage", data.time_machine_v2?.hindsight_leakage?.length || 0);
+}
+
+function renderAssurance() {
+  const data = state.v5;
+  if (!data) return;
+  text("assurance-level", data.assurance_level || "A0");
+  text("assurance-profile", `${data.observed_sources || 0} / ${data.expected_sources || 0} CONTRACT SOURCES`);
+  text("assurance-threat-risk", data.threat_risk || "UNKNOWN");
+  text("assurance-risk", data.assurance_risk || "UNKNOWN");
+  text("omission-risk", data.unknown_omission_risk || "UNKNOWN");
+  text("assurance-limitation", data.limitation || "Unknown omission risk cannot be eliminated.");
+
+  const vector = $("assurance-vector"); vector.replaceChildren();
+  [
+    ["Integrity", data.integrity],
+    ["Inclusion proofs", data.inclusion],
+    ["Log continuity", data.sequence_continuity],
+    ["Expected source coverage", `${data.observed_sources} / ${data.expected_sources}`],
+    ["Sequence coverage", percent(data.sequence_coverage)],
+    ["Sensor liveness", data.sensor_liveness],
+    ["Producer attestation", `${data.producer_attestation?.verified || 0} / ${data.producer_attestation?.expected || 0}`],
+    ["External anchoring", data.external_anchoring],
+    ["Independent re-derivation", data.independent_rederivation],
+    ["Unexplained gaps", data.unexplained_gaps],
+  ].forEach(([label, value]) => {
+    const row = create("div", `vector-row${["PARTIAL", "UNKNOWN"].includes(String(value)) || Number(value) > 0 ? " partial" : ""}`);
+    row.append(create("span", "", label), create("strong", "", value)); vector.append(row);
+  });
+
+  const proof = $("proof-path"); proof.replaceChildren();
+  (data.proof_path || []).forEach((label, index) => {
+    const button = create("button", `proof-step${index === 0 ? " is-active" : ""}`, label); button.type = "button";
+    button.addEventListener("click", () => {
+      proof.querySelectorAll("button").forEach((item) => item.classList.toggle("is-active", item === button));
+      text("proof-active", label.toUpperCase());
+      text("proof-digest", `${data.epoch_manifests?.[0]?.merkle_root || "no-root"} / step ${index + 1}`);
+    });
+    proof.append(button);
+  });
+
+  const heatmap = $("assurance-heatmap"); heatmap.replaceChildren(create("span", "heat-cell label", "TIME"));
+  (data.assurance_heatmap?.sources || []).forEach((source) => heatmap.append(create("span", "heat-cell label", source.toUpperCase())));
+  (data.assurance_heatmap?.rows || []).forEach((row) => {
+    heatmap.append(create("span", "heat-cell label", row.time));
+    row.cells.forEach((cell) => {
+      const node = create("button", `heat-cell${cell.status === "DARK" ? " dark" : ""}`, cell.status === "DARK" ? "GAP" : "LIVE");
+      node.type = "button";
+      if (cell.status === "DARK") node.addEventListener("click", () => {
+        const period = (data.dark_periods || []).find((item) => item.source === cell.source);
+        $("dark-period-detail").replaceChildren(
+          create("span", "", `${cell.source.toUpperCase()} SENSOR GAP`),
+          create("strong", "", period ? `${period.start} - ${period.end} / ${period.duration_seconds}s` : `${row.time} interval`),
+          create("p", "", period ? `Reason: ${period.reason}. Assurance impact: ${period.impact}.` : "No signed heartbeat was observed."),
+        );
+      });
+      heatmap.append(node);
+    });
+  });
+
+  const chain = $("observation-chain"); chain.replaceChildren();
+  (data.observation_world?.nodes || []).forEach((node) => chain.append(create("span", "", `${node.kind} / ${node.label}`)));
+  const path = $("recording-path"); path.replaceChildren();
+  (data.recording_path || []).forEach((stage, index) => {
+    const item = create("article", `path-stage${stage.status === "LOSS" ? " loss" : ""}`);
+    item.append(create("i", "", index + 1), create("span", "", stage.stage), create("strong", "", number.format(stage.count)));
+    path.append(item);
+  });
+
+  const claims = $("formal-claims"); claims.replaceChildren();
+  (data.formal_claims || []).forEach((claim) => {
+    const row = create("article", `claim-row${["PARTIAL", "UNKNOWN"].includes(claim.status) ? " partial" : ""}`);
+    row.append(create("span", "", claim.id), create("p", "", claim.statement), create("strong", "", claim.status)); claims.append(row);
+  });
+  [["what-we-know", data.what_we_know, "+"], ["what-we-cannot-prove", data.what_we_cannot_prove, "-"]].forEach(([id, values, symbol]) => {
+    const list = $(id); list.replaceChildren();
+    (values || []).forEach((value) => { const row = create("article", "boundary-item"); row.append(create("i", "", symbol), create("p", "", value)); list.append(row); });
+  });
+
+  const rederivation = $("rederivation-status"); rederivation.replaceChildren();
+  (data.rederivation || []).forEach((item) => {
+    const row = create("article", `rederive-row${item.classification.includes("NOT_REPRODUCIBLE") ? " recorded" : ""}`);
+    row.append(create("span", "", item.component), create("p", "", item.classification.replaceAll("_", " ")), create("strong", "", item.status)); rederivation.append(row);
+  });
+  const authority = $("assurance-authority"); authority.replaceChildren();
+  (data.authority || []).forEach((item) => { const row = create("article", "authority-assurance-row"); row.append(create("strong", "", item.action.replaceAll("_", " ")), create("span", "", item.decision.replaceAll("_", " "))); authority.append(row); });
+  const debts = data.assurance_debt || [];
+  $("assurance-debt").replaceChildren(create("strong", "", `ASSURANCE DEBT / ${debts.length}`), create("span", "", debts.length ? debts.map((item) => item.source).join(" / ") : "No open evidence debt"));
+
+  const attacks = $("assurance-attack-lab"); attacks.replaceChildren();
+  (data.attack_lab || []).forEach((item) => { const row = create("article", "attack-row"); row.append(create("strong", "", item.attack.replaceAll("_", " ")), create("span", "", item.result), create("small", "", item.detected_by)); attacks.append(row); });
+  const contract = data.contract || {}; const contractBox = $("evidence-contract"); contractBox.replaceChildren();
+  const identity = create("div", "contract-identity"); identity.append(create("strong", "", contract.contract_id || "NO CONTRACT"), create("span", "", `SIGNED / ${contract.version || "--"}`));
+  const sources = create("div", "contract-sources");
+  (contract.expected_sources || []).forEach((source) => sources.append(create("span", (data.missing_expected_sources || []).includes(source) ? "missing" : "", source.toUpperCase())));
+  contractBox.append(identity, sources, create("div", "contract-meta", `${contract.environment || "--"}<br>${contract.valid_from || "--"} TO ${contract.valid_until || "--"}<br>HASH / ${contract.contract_hash || "--"}`));
+  const witness = data.witness_reconciliation || {}; $("witness-status").replaceChildren(create("span", "", `WITNESSES / ${(witness.witnesses || []).length}`), create("span", "", witness.status || "UNKNOWN"), create("span", "", `SERVICES / ${(witness.services || []).length}`));
+}
+
+class ObservationField {
+  constructor(canvas) { this.canvas = canvas; this.context = canvas.getContext("2d"); this.resize = this.resize.bind(this); this.draw = this.draw.bind(this); new ResizeObserver(this.resize).observe(canvas); requestAnimationFrame(this.draw); }
+  resize() { const ratio = window.devicePixelRatio || 1; this.width = this.canvas.clientWidth; this.height = this.canvas.clientHeight; if (!this.width || !this.height) return; this.canvas.width = this.width * ratio; this.canvas.height = this.height * ratio; this.context.setTransform(ratio, 0, 0, ratio, 0, 0); }
+  draw() { if (!this.width) this.resize(); if (!this.width || !this.height) { requestAnimationFrame(this.draw); return; } const ctx = this.context; const nodes = state.v5?.observation_world?.nodes || []; const edges = state.v5?.observation_world?.edges || []; const points = nodes.map((node, index) => ({ node, x: 40 + index * ((this.width - 80) / Math.max(1, nodes.length - 1)), y: this.height / 2 + Math.sin(index * 1.7) * 55 })); const byId = new Map(points.map((point) => [point.node.id, point])); ctx.clearRect(0, 0, this.width, this.height); edges.forEach((edge) => { const left = byId.get(edge.source); const right = byId.get(edge.target); if (!left || !right) return; ctx.strokeStyle = "rgba(214,255,103,.35)"; ctx.beginPath(); ctx.moveTo(left.x, left.y); ctx.lineTo(right.x, right.y); ctx.stroke(); ctx.fillStyle = "rgba(214,255,103,.7)"; ctx.font = "7px monospace"; ctx.fillText(edge.relationship, (left.x + right.x) / 2 - 24, (left.y + right.y) / 2 - 8); }); points.forEach((point) => { ctx.fillStyle = point.node.kind === "HOST" ? "#ffbf69" : "#d6ff67"; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 12; ctx.beginPath(); ctx.arc(point.x, point.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.fillStyle = "#aebbb3"; ctx.font = "8px monospace"; ctx.fillText(point.node.label, point.x - 25, point.y + 22); }); requestAnimationFrame(this.draw); }
 }
 
 class WorldField {
@@ -699,12 +802,12 @@ class WorldField {
 async function refresh() {
   if (state.paused) return;
   try {
-    const [health, overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v4] = await Promise.all([
+    const [health, overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v4, v5] = await Promise.all([
       getJSON("/health"), getJSON("/overview"), getJSON("/flows?limit=60"), getJSON("/alerts?limit=20"),
       getJSON("/decisions?limit=60"), getJSON("/evidence?limit=30"), getJSON("/nim?limit=20"),
-      getJSON("/models"), getJSON("/metrics"), getJSON("/status"), getJSON("/v4/overview"),
+      getJSON("/models"), getJSON("/metrics"), getJSON("/status"), getJSON("/v4/overview"), getJSON("/v5/overview"),
     ]);
-    Object.assign(state, { overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v3: v4, v4 });
+    Object.assign(state, { overview, flows, alerts, decisions, evidence, nim, models, metrics, status, v3: v4, v4, v5 });
     state.lastRefresh = new Date();
     $("live-dot").className = "live-dot is-live";
     text("system-state", health.status === "ok" ? "System live" : health.status);
@@ -713,6 +816,7 @@ async function refresh() {
     renderForensics();
     renderCommand();
     renderPlatform();
+    renderAssurance();
   } catch (error) {
     $("live-dot").className = "live-dot is-error";
     text("system-state", "API unavailable");
@@ -726,6 +830,7 @@ document.querySelectorAll(".nav-chip").forEach((button) => {
     $("dashboard").dataset.view = button.dataset.view;
     if (button.dataset.view === "forensics") renderForensics();
     if (button.dataset.view === "command") { renderCommand(); renderPlatform(); }
+    if (button.dataset.view === "assurance") renderAssurance();
   });
 });
 
@@ -750,5 +855,6 @@ setInterval(() => text("field-clock", new Date().toLocaleTimeString("en-GB")), 1
 new NetworkField($("network-canvas"));
 new ForensicField($("forensic-canvas"));
 const worldField = new WorldField($("world-canvas"));
+new ObservationField($("assurance-world-canvas"));
 refresh();
 setInterval(refresh, 4000);
