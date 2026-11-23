@@ -8,7 +8,7 @@ import torch
 
 from packetflowai.capture import ReplayService
 from packetflowai.cli import build_parser
-from packetflowai.config import AppConfig, ArtifactPaths, ModelConfig
+from packetflowai.config import AppConfig, ArtifactPaths, ModelConfig, writable_artifact_root
 from packetflowai.domain import LocalPrediction, ThreatAssessment
 from packetflowai.features import packet_features_from_description
 from packetflowai.hdc import HypervectorEncoder
@@ -27,6 +27,15 @@ class ConfigurationTests(unittest.TestCase):
             config = AppConfig.from_env()
         self.assertEqual(config.model.hv_dimension, 256)
         self.assertEqual(config.runtime.queue_size, 12)
+
+    def test_cloud_artifacts_fall_back_when_application_path_is_not_a_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            blocked = root / "read-only-image"
+            blocked.write_text("not a directory", encoding="utf-8")
+            fallback = root / "runtime" / "packetflowai"
+            selected = writable_artifact_root(blocked, fallback)
+        self.assertEqual(selected, fallback)
 
 
 class CliTests(unittest.TestCase):

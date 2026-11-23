@@ -15,6 +15,8 @@ dependencies = [
   "scapy>=2.5",
   "datasets>=2.18",
   "scikit-learn>=1.4",
+  "dash>=2.16",
+  "plotly>=5.20",
 ]
 
 [project.optional-dependencies]
@@ -35,7 +37,7 @@ packetflow-verifier = "packetflow_verifier.cli:main"
 include = ["packetflowai*", "packetflow_verifier*"]
 
 [tool.setuptools.package-data]
-packetflowai = ["static/*.html", "static/*.css", "static/*.js"]
+packetflowai = ["static/*.html", "static/*.css", "static/*.js", "assets/*.css"]
 packetflow_verifier = ["web/*.html", "web/*.css", "web/*.js"]
 
 [tool.ruff]

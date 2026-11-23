@@ -1,6 +1,7 @@
 """Central application configuration."""
 
 import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -119,3 +120,22 @@ class AppConfig:
         if nim.mode not in {"disabled", "shadow", "influence"}:
             raise ValueError("PACKETFLOWAI_NIM_MODE must be disabled, shadow, or influence")
         return cls(artifacts=artifacts, model=model, runtime=runtime, nim=nim)
+
+
+def writable_artifact_root(preferred: Path, fallback: Path | None = None) -> Path:
+    """Select a writable default for read-only cloud application images.
+
+    Explicitly configured artifact paths bypass this helper so a bad persistent
+    mount remains a visible deployment error instead of silently losing data.
+    """
+    candidates = (preferred, fallback or (Path(tempfile.gettempdir()) / "packetflowai-artifacts"))
+    errors: list[str] = []
+    for candidate in candidates:
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(prefix=".packetflow-write-", dir=candidate, delete=True):
+                pass
+            return candidate
+        except OSError as error:
+            errors.append(f"{candidate}: {error}")
+    raise RuntimeError("no writable PacketFlowAI artifact directory: " + "; ".join(errors))

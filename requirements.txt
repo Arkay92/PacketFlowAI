@@ -3,3 +3,6 @@ numpy>=1.26
 scapy>=2.5
 datasets>=2.18
 scikit-learn>=1.4
+dash>=2.16
+plotly>=5.20
+gunicorn>=21.0; platform_system != "Windows"

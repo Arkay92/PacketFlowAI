@@ -1,0 +1,4 @@
+dash>=2.16
+plotly>=5.20
+numpy>=1.26
+gunicorn>=21.0; platform_system != "Windows"

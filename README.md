@@ -13,7 +13,7 @@ PacketFlowAI is a verifiable-assurance cyber-defence prototype. It separates thr
 - Deterministic fusion, ATT&CK provenance, alert-only defaults, and TTL containment gates
 - SQLite evidence, analyst-adjudicated feedback, drift checks, and active learning
 - Candidate/active/previous model registry with promotion and rollback
-- Read-only API, Prometheus metrics, structured logs, and operations dashboard
+- Python-native Plotly + Dash Signal Room with read-only API, Prometheus metrics, and structured logs
 - Persistent campaign graph connecting flows, hosts, accounts, services, alerts, ATT&CK techniques, and cases
 - Next-move prediction with uncertainty, evidence references, and time horizons
 - Counterfactual response simulation and digital-twin blast-radius analysis
@@ -77,10 +77,28 @@ python -m packetflowai benchmark run --dataset cicids2017 --input test.csv \
 python -m packetflowai model list
 python -m packetflowai model promote packet-hv-mlp:2.3.0
 python -m packetflowai api --host 127.0.0.1 --port 8080
+python app.py
 python -m packetflowai loadtest --flows 10000 --packets-per-flow 4
 ```
 
-The API command starts the **Signal Room** at `http://127.0.0.1:8080`. The live dashboard visualizes flow activity, threat pressure, classifications, alerts, evidence channels, model state, and runtime telemetry. It refreshes every four seconds and exposes a pause control for incident review.
+The API command starts the Plotly + Dash **Signal Room** at `http://127.0.0.1:8080`; `python app.py` provides the dashboard-first entry point at `http://127.0.0.1:8050`. One WSGI process serves both the interactive visual layer and the stable read-only API. The dashboard refreshes every four seconds and visualizes network topology, flow activity, threat pressure, classifications, alerts, evidence channels, model state, runtime telemetry, and PFCASE assurance.
+
+## Cloud deployment
+
+Build the self-contained Plotly Cloud / Dash Enterprise upload bundle:
+
+```bash
+python scripts/prepare_cloud.py
+```
+
+Upload the contents of `deploy/plotly-cloud/` and use `app:server` as the WSGI entry point. The generated folder contains `app.py`, `main.py`, production requirements, deployment guidance, CSS assets, and the complete PacketFlowAI package. Re-run the packager after source changes to keep the cloud bundle in sync.
+
+For a container deployment:
+
+```bash
+docker build -t packetflowai .
+docker run --rm -p 8050:8050 packetflowai
+```
 
 The **Forensics** view isolates orange and red packet conversations for deeper analysis. Select cases from the threat constellation or case strip, use the arrow keys to move between incidents, and inspect route identity, packet statistics, directional volume, model evidence, protocol metadata, policy provenance, and the correlated read-only record.
 

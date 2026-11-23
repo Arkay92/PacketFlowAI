@@ -126,6 +126,18 @@ class EventStore:
         ).fetchall()
         return [{**dict(row), "payload": json.loads(row["payload"])} for row in rows]
 
+    def prune(self, table: str, keep: int = 1_000) -> None:
+        """Bound high-volume ephemeral telemetry tables by newest records."""
+        if table not in {"flows", "alerts", "decisions", "evidence", "nim_assessments", "feedback"}:
+            raise ValueError("unsupported table")
+        with self._lock:
+            self._connection.execute(
+                f"DELETE FROM {table} WHERE rowid NOT IN "
+                f"(SELECT rowid FROM {table} ORDER BY created_at DESC LIMIT ?)",
+                (max(int(keep), 0),),
+            )
+            self._connection.commit()
+
     def overview(self) -> dict[str, Any]:
         tables = ("flows", "alerts", "decisions", "evidence", "nim_assessments", "feedback")
         counts = {

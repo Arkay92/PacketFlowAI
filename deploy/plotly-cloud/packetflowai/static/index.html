@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0f10">
+  <title>PacketFlowAI // Signal Room</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="PacketFlowAI Signal Room">
+      <span class="brand-mark">PF</span>
+      <span><strong>PacketFlowAI</strong><small>Signal Room</small></span>
+    </a>
+    <nav class="view-nav" aria-label="Dashboard views">
+      <button class="nav-chip is-active" data-view="all">Overview</button>
+      <button class="nav-chip" data-view="traffic">Traffic</button>
+      <button class="nav-chip" data-view="threats">Threats</button>
+      <button class="nav-chip" data-view="reasoning">Reasoning</button>
+      <button class="nav-chip forensic-nav" data-view="forensics">Forensics</button>
+      <button class="nav-chip command-nav" data-view="command">Command</button>
+      <button class="nav-chip assurance-nav" data-view="assurance">Assurance</button>
+    </nav>
+    <div class="system-state">
+      <span class="live-dot" id="live-dot"></span>
+      <span><strong id="system-state">Connecting</strong><small id="last-sync">Awaiting telemetry</small></span>
+      <button class="pause-button" id="pause-button" type="button" aria-pressed="false">Pause feed</button>
+    </div>
+  </header>
+
+  <main class="dashboard-shell" id="dashboard" data-view="all">
+    <section class="mission-strip" aria-label="System summary">
+      <div class="mission-copy">
+        <span class="eyebrow">Live network observatory</span>
+        <h1>See the shape of<br><em>every conversation.</em></h1>
+      </div>
+      <div class="metric-rack">
+        <article><span>Flows observed</span><strong id="metric-flows">0</strong><small id="metric-flow-rate">0.0 / sec</small></article>
+        <article><span>Open alerts</span><strong id="metric-alerts">0</strong><small id="metric-alert-note">No active alerts</small></article>
+        <article><span>Evidence points</span><strong id="metric-evidence">0</strong><small>Local + reasoning</small></article>
+        <article><span>NIM escalations</span><strong id="metric-nim">0</strong><small id="nim-mode-summary">Mode disabled</small></article>
+      </div>
+    </section>
+
+    <section class="panel network-panel span-8" data-panel="traffic">
+      <header class="panel-heading">
+        <div><span class="panel-index">01</span><h2>Network field</h2></div>
+        <div class="legend" aria-label="Network field legend">
+          <span><i class="legend-benign"></i>Normal</span>
+          <span><i class="legend-observe"></i>Observed</span>
+          <span><i class="legend-threat"></i>Threat</span>
+        </div>
+      </header>
+      <div class="network-stage">
+        <canvas id="network-canvas" aria-label="Animated visualization of recent network flows"></canvas>
+        <div class="network-reticle" aria-hidden="true"><span></span><span></span></div>
+        <div class="field-caption">
+          <span id="field-protocol">TCP / UDP / IPv6</span>
+          <strong id="field-status">Waiting for flow telemetry</strong>
+        </div>
+        <div class="field-clock" id="field-clock">00:00:00</div>
+      </div>
+    </section>
+
+    <section class="panel risk-panel span-4" data-panel="threats">
+      <header class="panel-heading"><div><span class="panel-index">02</span><h2>Threat pressure</h2></div><span class="status-tag" id="policy-level">NORMAL</span></header>
+      <div class="risk-instrument" id="risk-instrument" style="--risk:0">
+        <svg viewBox="0 0 240 145" role="img" aria-label="Current risk score">
+          <path class="gauge-track" d="M30 125 A90 90 0 0 1 210 125"></path>
+          <path class="gauge-value" d="M30 125 A90 90 0 0 1 210 125" pathLength="100"></path>
+        </svg>
+        <div class="risk-readout"><strong id="risk-current">0</strong><span>/ 100</span><small>Current fused risk</small></div>
+      </div>
+      <div class="risk-stats">
+        <div><span>Session peak</span><strong id="risk-peak">0</strong></div>
+        <div><span>Rolling mean</span><strong id="risk-average">0</strong></div>
+      </div>
+      <canvas class="sparkline" id="risk-sparkline" aria-label="Recent risk trend"></canvas>
+    </section>
+
+    <section class="panel flow-panel span-7" data-panel="traffic">
+      <header class="panel-heading">
+        <div><span class="panel-index">03</span><h2>Flow ledger</h2></div>
+        <span class="panel-meta" id="flow-count-label">Latest 0</span>
+      </header>
+      <div class="table-head" aria-hidden="true"><span>Route</span><span>Protocol</span><span>Volume</span><span>State</span></div>
+      <div class="flow-ledger" id="flow-ledger" data-testid="flow-ledger">
+        <div class="empty-state"><span class="empty-pulse"></span><strong>Listening for flows</strong><small>Capture or replay traffic to populate the ledger.</small></div>
+      </div>
+    </section>
+
+    <section class="panel class-panel span-5" data-panel="threats">
+      <header class="panel-heading"><div><span class="panel-index">04</span><h2>Classification mix</h2></div><span class="panel-meta">Last 1,000 decisions</span></header>
+      <div class="classification-bars" id="classification-bars"></div>
+      <div class="taxonomy-note"><span>Stage A</span><strong>Benign / malicious / unknown</strong><span>Stage B</span><strong>Attack family</strong></div>
+    </section>
+
+    <section class="panel incident-panel span-6" data-panel="threats">
+      <header class="panel-heading"><div><span class="panel-index">05</span><h2>Incident rail</h2></div><span class="severity-key">Priority ordered</span></header>
+      <div class="incident-list" id="incident-list">
+        <div class="empty-state compact"><strong>No policy alerts</strong><small>Alert-only mode is standing by.</small></div>
+      </div>
+    </section>
+
+    <section class="panel reasoning-panel span-6" data-panel="reasoning">
+      <header class="panel-heading"><div><span class="panel-index">06</span><h2>Evidence channels</h2></div><span class="status-tag muted" id="nim-mode">NIM DISABLED</span></header>
+      <div class="channel-grid">
+        <article><span class="channel-signal local"></span><small>Local classifier</small><strong id="local-confidence">--</strong><em>Calibrated confidence</em></article>
+        <article><span class="channel-signal prototype"></span><small>HDC prototype</small><strong id="prototype-similarity">--</strong><em>Cosine similarity</em></article>
+        <article><span class="channel-signal anomaly"></span><small>Anomaly model</small><strong id="anomaly-score">--</strong><em>Deviation score</em></article>
+        <article><span class="channel-signal nim"></span><small>NIM reasoning</small><strong id="nim-strength">--</strong><em>Separate, uncalibrated</em></article>
+      </div>
+      <div class="reasoning-trace" id="reasoning-trace">
+        <span>Decision provenance</span>
+        <p>No fused decision has been recorded.</p>
+      </div>
+    </section>
+
+    <section class="panel model-panel span-5" data-panel="reasoning">
+      <header class="panel-heading"><div><span class="panel-index">07</span><h2>Model registry</h2></div><span class="panel-meta" id="model-count">0 artifacts</span></header>
+      <div class="model-stack" id="model-stack">
+        <div class="empty-state compact"><strong>No registered model</strong><small>Train, evaluate, shadow, then promote.</small></div>
+      </div>
+    </section>
+
+    <section class="panel runtime-panel span-7" data-panel="all">
+      <header class="panel-heading"><div><span class="panel-index">08</span><h2>Runtime telemetry</h2></div><span class="status-tag safe">BOUNDED</span></header>
+      <div class="runtime-grid">
+        <article><span>Packets / sec</span><strong id="runtime-pps">0.0</strong><i style="--fill:0%"></i></article>
+        <article><span>Flows / sec</span><strong id="runtime-fps">0.0</strong><i style="--fill:0%"></i></article>
+        <article><span>Inference p95</span><strong id="runtime-p95">0 ms</strong><i style="--fill:0%"></i></article>
+        <article><span>Queue depth</span><strong id="runtime-queue">0</strong><i style="--fill:0%"></i></article>
+        <article><span>Dropped packets</span><strong id="runtime-dropped">0</strong><i class="danger" style="--fill:0%"></i></article>
+        <article><span>Memory traced</span><strong id="runtime-memory">0 MB</strong><i style="--fill:0%"></i></article>
+      </div>
+    </section>
+
+    <section class="forensics-workspace" data-panel="forensics" aria-labelledby="forensics-title">
+      <header class="forensics-commandbar">
+        <div>
+          <span class="eyebrow">Threat analysis cell</span>
+          <h1 id="forensics-title">Forensic war room</h1>
+        </div>
+        <div class="forensic-counter">
+          <span>Flagged conversations</span>
+          <strong id="forensic-case-count">0</strong>
+          <small id="forensic-case-position">No case selected</small>
+        </div>
+        <div class="forensic-controls" aria-label="Forensic case navigation">
+          <button id="forensic-previous" type="button" aria-label="Previous forensic case">PREV <kbd>←</kbd></button>
+          <button id="forensic-next" type="button" aria-label="Next forensic case">NEXT <kbd>→</kbd></button>
+        </div>
+      </header>
+
+      <div class="forensics-grid">
+        <section class="forensic-map forensic-module" aria-labelledby="forensic-map-title">
+          <header><span>01</span><h2 id="forensic-map-title">Threat constellation</h2><small>SELECT A SIGNAL</small></header>
+          <div class="forensic-map-stage">
+            <canvas id="forensic-canvas" aria-label="Interactive map of orange and red forensic cases"></canvas>
+            <div class="forensic-scope" aria-hidden="true"><i></i><i></i></div>
+            <div class="forensic-map-key">
+              <span><i class="orange"></i>Suspicious</span>
+              <span><i class="red"></i>High confidence</span>
+            </div>
+            <p id="forensic-map-hint">Awaiting an orange or red policy signal.</p>
+          </div>
+          <div class="forensic-case-strip" id="forensic-case-strip" aria-label="Forensic case list"></div>
+        </section>
+
+        <aside class="forensic-dossier forensic-module" aria-labelledby="forensic-dossier-title">
+          <header><span>02</span><h2 id="forensic-dossier-title">Active dossier</h2><small id="forensic-severity">STANDBY</small></header>
+          <div class="dossier-identity">
+            <span id="forensic-case-id">NO ACTIVE CASE</span>
+            <h2 id="forensic-label">Waiting for evidence</h2>
+            <p id="forensic-explanation">Flagged packet conversations will be assembled here for analyst review.</p>
+          </div>
+          <div class="route-vector">
+            <div><span>Origin</span><strong id="forensic-source">--</strong><small id="forensic-source-port">PORT --</small></div>
+            <span class="route-arrow" aria-hidden="true">→</span>
+            <div><span>Target</span><strong id="forensic-destination">--</strong><small id="forensic-destination-port">PORT --</small></div>
+          </div>
+          <dl class="dossier-facts">
+            <div><dt>Protocol</dt><dd id="forensic-protocol">--</dd></div>
+            <div><dt>Flow state</dt><dd id="forensic-state">--</dd></div>
+            <div><dt>Risk score</dt><dd id="forensic-risk">--</dd></div>
+            <div><dt>Policy</dt><dd id="forensic-policy">--</dd></div>
+            <div><dt>First observed</dt><dd id="forensic-created">--</dd></div>
+            <div><dt>Duration</dt><dd id="forensic-duration">--</dd></div>
+          </dl>
+          <div class="analyst-directive">
+            <span>Analyst directive</span>
+            <strong id="forensic-action">MONITOR</strong>
+            <p id="forensic-reason">Local policy remains authoritative.</p>
+          </div>
+        </aside>
+
+        <section class="forensic-details forensic-module" aria-labelledby="forensic-details-title">
+          <header><span>03</span><h2 id="forensic-details-title">Packet anatomy</h2><small>FLOW-LEVEL RECONSTRUCTION</small></header>
+          <div class="forensic-stat-grid">
+            <article><span>Packets</span><strong id="forensic-packets">0</strong><small id="forensic-direction">0 FWD / 0 REV</small></article>
+            <article><span>Total volume</span><strong id="forensic-bytes">0 B</strong><small id="forensic-byte-rate">0 B/S</small></article>
+            <article><span>Packet rate</span><strong id="forensic-packet-rate">0.0</strong><small>PACKETS / SEC</small></article>
+            <article><span>Retransmits</span><strong id="forensic-retransmits">0</strong><small id="forensic-tcp-flags">SYN 0 / RST 0</small></article>
+            <article><span>Burst index</span><strong id="forensic-burst">0.00</strong><small>TRAFFIC SHAPE</small></article>
+            <article><span>Host spread</span><strong id="forensic-hosts">0</strong><small id="forensic-ports">0 DEST PORTS</small></article>
+          </div>
+          <div class="packet-balance">
+            <div class="balance-label"><span>Forward bytes</span><strong id="forensic-forward-bytes">0 B</strong></div>
+            <div class="balance-track"><i id="forensic-forward-bar"></i><i id="forensic-reverse-bar"></i></div>
+            <div class="balance-label reverse"><span>Reverse bytes</span><strong id="forensic-reverse-bytes">0 B</strong></div>
+          </div>
+        </section>
+
+        <section class="forensic-evidence forensic-module" aria-labelledby="forensic-evidence-title">
+          <header><span>04</span><h2 id="forensic-evidence-title">Evidence matrix</h2><small>FUSED, NOT FLATTENED</small></header>
+          <div class="forensic-evidence-grid" id="forensic-evidence-grid"></div>
+        </section>
+
+        <section class="forensic-raw forensic-module" aria-labelledby="forensic-raw-title">
+          <header><span>05</span><h2 id="forensic-raw-title">Protocol &amp; record</h2><small>READ-ONLY EVIDENCE</small></header>
+          <div class="raw-columns">
+            <dl id="forensic-metadata" class="metadata-list"></dl>
+            <pre id="forensic-raw-json" tabindex="0">{ "status": "awaiting_case" }</pre>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="command-workspace" data-panel="command" aria-labelledby="command-title">
+      <header class="command-hero">
+        <div><span class="eyebrow">Collective defence cell / v4</span><h1 id="command-title">Threat world<br><em>in motion.</em></h1></div>
+        <div class="command-posture"><span>Operational posture</span><strong id="command-posture">CALCULATING</strong><small id="command-generated">Awaiting graph synthesis</small></div>
+      </header>
+      <div class="command-grid">
+        <section class="command-module world-module">
+          <header><span>01</span><h2>Threat world model</h2><small id="world-counts">0 nodes / 0 edges</small></header>
+          <div class="world-stage"><canvas id="world-canvas" aria-label="Interactive campaign and entity graph"></canvas><div class="world-radar"></div><p>SELECT AN ENTITY TO TRACE ITS CONNECTIONS</p></div>
+          <div class="world-selection" id="world-selection"><span>ACTIVE ENTITY</span><strong>No evidence loaded</strong><small>The temporal graph will connect hosts, identities, services and techniques.</small></div>
+        </section>
+        <aside class="command-module forecast-module">
+          <header><span>02</span><h2>Next-move prediction</h2><small>30 MINUTE HORIZON</small></header>
+          <div class="campaign-callout"><span>ACTIVE CAMPAIGN</span><strong id="campaign-title">NO CAMPAIGN</strong><p id="campaign-summary">Waiting for correlated activity.</p></div>
+          <div id="prediction-list" class="prediction-list"></div>
+          <div class="forecast-uncertainty"><span>Residual uncertainty</span><strong id="forecast-uncertainty">--</strong></div>
+        </aside>
+        <section class="command-module simulation-module">
+          <header><span>03</span><h2>Counterfactual defence</h2><small>COMPARE BEFORE AUTHORITY</small></header>
+          <div class="simulation-heading"><div><span>SIMULATED TARGET</span><strong id="simulation-target">--</strong></div><p id="simulation-rationale">No active simulation.</p></div>
+          <div id="simulation-options" class="simulation-options"></div>
+        </section>
+        <section class="command-module twin-module">
+          <header><span>04</span><h2>Cyber digital twin</h2><small>BLAST RADIUS</small></header>
+          <div class="twin-orbit"><i></i><i></i><i></i><div><span>PATHS</span><strong id="twin-paths">0</strong><small>REMOVED</small></div></div>
+          <dl class="twin-facts"><div><dt>Recommended</dt><dd id="twin-action">OBSERVE</dd></div><div><dt>Disrupted</dt><dd id="twin-disrupted">0 flows</dd></div><div><dt>Dependency</dt><dd id="twin-dependency">CLEAR</dd></div></dl>
+        </section>
+        <section class="command-module time-module">
+          <header><span>05</span><h2>Evidence time machine</h2><small>KNOWLEDGE AS-OF</small></header>
+          <div class="time-readout"><span>RECONSTRUCTION POINT</span><strong id="time-value">No evidence timestamp</strong></div>
+          <input id="time-slider" type="range" min="0" max="0" value="0" aria-label="Evidence reconstruction point">
+          <div class="time-facts"><article><span>Known flows</span><strong id="time-known-flows">0</strong></article><article><span>Known decisions</span><strong id="time-known-decisions">0</strong></article><article><span>Future hidden</span><strong id="time-future">0</strong></article><article><span>Policy then</span><strong id="time-policy">NORMAL</strong></article></div>
+        </section>
+        <section class="command-module integrity-module">
+          <header><span>06</span><h2>Forensic integrity</h2><small id="integrity-state">UNVERIFIED</small></header>
+          <div class="integrity-seal"><div>PF</div><span>HASH CHAIN</span><strong id="integrity-events">0 SEALED EVENTS</strong></div>
+          <code id="merkle-root">No Merkle root</code><div class="integrity-checks" id="integrity-checks"></div>
+        </section>
+        <section class="command-module authority-module">
+          <header><span>07</span><h2>Authority graph</h2><small>EXPLICIT CONTROL</small></header>
+          <div id="authority-ladder" class="authority-ladder"></div>
+        </section>
+        <section class="command-module capability-module">
+          <header><span>08</span><h2>Defence fabric</h2><small>SUPPORTING SYSTEMS</small></header>
+          <div id="capability-rail" class="capability-rail"></div>
+        </section>
+        <section class="command-module assurance-module">
+          <header><span>09</span><h2>Assurance deck</h2><small>CHALLENGE THE LEADING STORY</small></header>
+          <div class="assurance-grid">
+            <article><span>CAUSAL LINKS</span><strong id="causal-link-count">0</strong><small id="causal-root">Root cause unresolved</small></article>
+            <article><span>EARLIEST INTERVENTION</span><strong id="earliest-intervention">--</strong><small id="missed-opportunity">No missed opportunity detected</small></article>
+            <article><span>MINIMUM INTERVENTION</span><strong id="minimum-intervention">OBSERVE</strong><small id="residual-risk">Residual risk --</small></article>
+            <article><span>EXPECTED-SOURCE COVERAGE</span><strong id="evidence-coverage">0%</strong><small id="missing-context">Awaiting sensor context</small></article>
+          </div>
+        </section>
+        <section class="command-module platform-module">
+          <header><span>10</span><h2>Collective defence matrix</h2><small>IMPLEMENTATION DOMAINS</small></header>
+          <div id="platform-domains" class="platform-domains"></div>
+          <div class="runtime-posture"><span>ADAPTIVE BATCH <b id="adaptive-batch">1</b></span><span>CAPTURE PATHS <b id="capture-paths">0</b></span><span>HINDSIGHT LEAKAGE <b id="hindsight-leakage">0</b></span></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="assurance-workspace" data-panel="assurance" aria-labelledby="assurance-title">
+      <header class="assurance-hero">
+        <div><span class="eyebrow">Verifiable assurance / v5</span><h1 id="assurance-title">Know what you<br><em>can prove.</em></h1></div>
+        <div class="assurance-level"><span>ASSURANCE LEVEL</span><strong id="assurance-level">A0</strong><small id="assurance-profile">CALCULATING TRUST BOUNDARY</small></div>
+        <div class="risk-duality"><article><span>THREAT RISK</span><strong id="assurance-threat-risk">--</strong></article><article><span>EVIDENCE ASSURANCE</span><strong id="assurance-risk">--</strong></article></div>
+      </header>
+
+      <div class="assurance-war-grid">
+        <section class="assurance-panel vector-panel">
+          <header><span>01</span><h2>Evidence assurance vector</h2><small>WHAT TRUST WAS EARNED</small></header>
+          <div id="assurance-vector" class="assurance-vector"></div>
+          <div class="omission-warning"><span>UNKNOWN OMISSION RISK</span><strong id="omission-risk">NOT EVALUATED</strong><p>Absence outside expected recording paths cannot be disproved by the record alone.</p></div>
+        </section>
+
+        <section class="assurance-panel proof-panel">
+          <header><span>02</span><h2>Proof explorer</h2><small>WHY IS THIS VERIFIED?</small></header>
+          <div id="proof-path" class="proof-path"></div>
+          <div class="proof-inspector"><span>ACTIVE PROOF</span><strong id="proof-active">SELECT A PROOF STEP</strong><code id="proof-digest">awaiting committed material</code></div>
+        </section>
+
+        <section class="assurance-panel heatmap-panel">
+          <header><span>03</span><h2>Observation heatmap</h2><small>SENSOR DARK-PERIOD DETECTION</small></header>
+          <div id="assurance-heatmap" class="assurance-heatmap"></div>
+          <div id="dark-period-detail" class="dark-period-detail"><span>SELECT A DARK CELL</span><strong>Recording-path visibility over time</strong><p>Live cells establish liveness only for the declared source and interval.</p></div>
+        </section>
+
+        <section class="assurance-panel observation-panel">
+          <header><span>04</span><h2>Assurance world model</h2><small>THE MACHINERY OBSERVING REALITY</small></header>
+          <div class="observation-stage"><canvas id="assurance-world-canvas" aria-label="Observation-plane assurance graph"></canvas><div class="observation-reticle"></div></div>
+          <div id="observation-chain" class="observation-chain"></div>
+        </section>
+
+        <section class="assurance-panel path-panel">
+          <header><span>05</span><h2>Recording path</h2><small>PRODUCED TO COMMITTED</small></header>
+          <div id="recording-path" class="recording-path"></div>
+          <p class="path-limitation" id="assurance-limitation">Count anchoring detects removal of committed events. It does not prove that an event was generated before commitment.</p>
+        </section>
+
+        <section class="assurance-panel claims-panel">
+          <header><span>06</span><h2>Formal assurance claims</h2><small>STRICTLY SCOPED STATEMENTS</small></header>
+          <div id="formal-claims" class="formal-claims"></div>
+        </section>
+
+        <section class="assurance-panel know-panel">
+          <header><span>07</span><h2>What we know</h2><small>SUPPORTED BY THE RECORD</small></header>
+          <div id="what-we-know" class="boundary-list positive"></div>
+        </section>
+
+        <section class="assurance-panel unknown-panel">
+          <header><span>08</span><h2>What we cannot prove</h2><small>TRUST BOUNDARY</small></header>
+          <div id="what-we-cannot-prove" class="boundary-list negative"></div>
+        </section>
+
+        <section class="assurance-panel rederive-panel">
+          <header><span>09</span><h2>Re-derivation boundary</h2><small>REPRODUCED VS RECORDED</small></header>
+          <div id="rederivation-status" class="rederivation-status"></div>
+        </section>
+
+        <section class="assurance-panel authority-assurance-panel">
+          <header><span>10</span><h2>Assurance-aware authority</h2><small>WEAK EVIDENCE WEAKENS PERMISSION</small></header>
+          <div id="assurance-authority" class="assurance-authority"></div>
+          <div id="assurance-debt" class="assurance-debt"></div>
+        </section>
+
+        <section class="assurance-panel attack-record-panel">
+          <header><span>11</span><h2>Attack the attack record</h2><small>EVIDENCE CHAOS LAB</small></header>
+          <div id="assurance-attack-lab" class="assurance-attack-lab"></div>
+        </section>
+
+        <section class="assurance-panel contract-panel">
+          <header><span>12</span><h2>Evidence contract</h2><small>SIGNED BEFORE THE INCIDENT</small></header>
+          <div id="evidence-contract" class="evidence-contract"></div>
+          <div id="witness-status" class="witness-status"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer-bar">
+    <span>PacketFlowAI v5.0</span>
+    <span>Integrity is not completeness</span>
+    <span id="footer-mode">Containment disabled</span>
+  </footer>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
